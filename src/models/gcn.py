@@ -25,9 +25,9 @@ class GCNLayer:
         self.w = np.random.uniform(
             low=-limit, high=limit, size=(self.n_inputs, self.n_outputs)
         )
-        self.h
-        self.w
-        self.x
+        self.h: np.ndarray
+        self.w: np.ndarray
+        self.x: np.ndarray
 
     def __repr__(self) -> str:
         return f"GCN: W{'_' + self.name if self.name else ''} ({self.n_inputs}, {self.n_outputs})"
