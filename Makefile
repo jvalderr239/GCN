@@ -2,7 +2,7 @@
 # define the name of the virtual environment directory
 VENV := .venv
 BIN := ${VENV}/bin
-PYTHON := ${BIN}/python3.10 -m
+PYTHON := ${BIN}/python3.8 -m
 DIST := ${VENV}/dist
 PIP := ${PYTHON} pip install --upgrade
 LIBS := ${VENV}/lib/python3.10/site-packages
@@ -30,7 +30,7 @@ coverage_src = src
 all: venv
 
 $(VENV)/bin/activate: requirements.txt setup.py
-	test -d $(VENV) || python3.10 -m venv $(VENV)
+	test -d $(VENV) || python3.8 -m venv $(VENV)
 	${PIP} pip black isort mypy pytest coverage pylint 
 	${PIP} -r requirements.txt
 
