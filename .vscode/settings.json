@@ -55,8 +55,8 @@
     "python.languageServer": "Pylance",
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": true,
-    "python.linting.pylintPath": "GCN/venv/bin/pylint",
-    "python.formatting.blackPath": "GCN/venv/bin/black",
+    "python.linting.pylintPath": "NFLBIGDATA/.venv/bin/pylint",
+    "python.formatting.blackPath": "NFLBIGDATA/.venv/bin/black",
     "python.formatting.provider": "black",
     "editor.formatOnSave": true,
     "python.linting.pylintArgs": [
