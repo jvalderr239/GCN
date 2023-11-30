@@ -26,7 +26,7 @@ setup(
         "torch==1.13.1",
         "torchvision==0.14.1",
         "tqdm==4.64.1",
-        "numpy",
+        "numpy>=1.24, <1.26",
         "protobuf"
     ],
     extras_require={
