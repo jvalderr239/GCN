@@ -4,16 +4,16 @@ with open("./README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="GCN",
+    name="NFLBIGDATA_GCN",
     version="0.0.1",
     author="Jose Valderrama",
     author_email="jvalderr239@gmail.com",
-    description="Graphical Neural Network",
+    description="Social Transformer for NFL Big Data Kaggle Competition",
     long_description=long_description,
     long_description_content_type="text/markdown",
     project_urls={
-        "Source": "https://github.com/jvalderr239/GCN",
-        "Bug Tracker": "https://github.com/jvalderr239/GCN/issues",
+        "Source": "https://github.com/jvalderr239/NFLBIGDATA",
+        "Bug Tracker": "https://github.com/jvalderr239/NFLBIGDATA/issues",
     },
     packages=find_packages(),
     classifiers=[
@@ -38,8 +38,9 @@ setup(
             "torchsummary",
             "ipywidgets",
             "widgetsnbextension",
-            "pandas-profiling"
+            "pandas-profiling",
+            "pip-tools"
             ]
     },
-    python_requires=">=3.8"
+    python_requires=">=3.9"
 )

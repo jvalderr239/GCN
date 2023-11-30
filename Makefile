@@ -1,12 +1,14 @@
 .ONESHELL:
 # define the name of the virtual environment directory
+PROJECT_NAME := NFLBIGDATA
+PYTHON_VERSION := python3.9
+
 VENV := .venv
 BIN := ${VENV}/bin
-PYTHON := ${BIN}/python3.8 -m
+PYTHON := ${BIN}/${PYTHON_VERSION} -m
 DIST := ${VENV}/dist
 PIP := ${PYTHON} pip install --upgrade
-LIBS := ${VENV}/lib/python3.10/site-packages
-VENV_PROJECT := ${VENV}/vit
+VENV_PROJECT := ${VENV}/${PROJECT_NAME}
 PROJECT := ${VENV}/../
 BUILD := ./build
 
@@ -30,7 +32,7 @@ coverage_src = src
 all: venv
 
 $(VENV)/bin/activate: requirements.txt setup.py
-	test -d $(VENV) || python3.8 -m venv $(VENV)
+	test -d $(VENV) || ${PYTHON_VERSION} -m venv $(VENV)
 	${PIP} pip black isort mypy pytest coverage pylint 
 	${PIP} -r requirements.txt
 
@@ -68,8 +70,11 @@ format: venv
 	${PYTHON} black ${python_src}
 	${PYTHON} isort ${python_src}
 
-dev: 
-	pip install -e ${PROJECT}.[dev] 
+dev: venv
+	${PIP} -e ${PROJECT}.[dev] 
+	${PIP} ipykernel
+	${PYTHON} ipykernel install --user --name=${PROJECT_NAME}
+
 
 lint:
 	${PYTHON} pylint ${python_src} -f parseable -r n
