@@ -72,7 +72,8 @@ disable=
     missing-module-docstring,
     useless-parent-delegation,
     missing-final-newline,
-    unspecified-encoding
+    unspecified-encoding,
+    too-many-arguments
 
 [REPORTS]
 
