@@ -23,10 +23,12 @@ class GCN(nn.Module):
             Input graph sequence format: (batch_size, in_channels, len_input_seq, num_nodes)
 
         - Input[1]:
-            Input graph adjacency matrix format: (kernel_size[1], num_nodes, num_nodes)
+            Input graph adjacency matrix format:
+                (kernel_size[1], num_nodes, num_nodes)
 
         - Output[0]:
-            Output graph sequence format: (batch_size, out_channels, len_output_seq, num_nodes, num_nodes)
+            Output graph sequence format:
+                (batch_size, out_channels, len_output_seq, num_nodes, num_nodes)
 
         - Output[1]:
             Graph adjacency matrix for output data format: (kernel_size[1], num_nodes, num_nodes)

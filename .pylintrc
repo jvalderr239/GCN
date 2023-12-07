@@ -73,7 +73,8 @@ disable=
     useless-parent-delegation,
     missing-final-newline,
     unspecified-encoding,
-    too-many-arguments
+    too-many-arguments,
+    consider-iterating-dictionary,
 
 [REPORTS]
 
