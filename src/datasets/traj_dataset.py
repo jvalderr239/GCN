@@ -30,7 +30,7 @@ class TrajectoryDataset(Dataset):
         """
         super(TrajectoryDataset, self).__init__()
 
-        self.max_num_players = 22 + 1  # include football
+        self.max_num_players = 22
         self.df = data
         self.obs_len = obs_len
         self.pred_len = pred_len

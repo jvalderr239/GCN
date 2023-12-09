@@ -1,16 +1,10 @@
+from typing import Optional
+
 from torch import nn
 from torchvision import models
 
+from .cnn import EVENT_PREDICTOR_CNN
 from .st_gcn import ST_GCN
-
-MODEL_MAP = {
-    "resnet": models.resnet18,
-    "inception": models.inception_v3,
-    "densenet": models.densenet161,
-    "wide_resnet": models.wide_resnet50_2,
-    "mobilenet_small": models.mobilenet_v3_small,
-    "mobilenet_large": models.mobilenet_v3_large,
-}
 
 
 class SOCIAL_COLLISION_STGCNN(nn.Module):
@@ -31,6 +25,8 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
 
     def __init__(
         self,
+        num_classes: int,
+        num_events: int,
         n_stgcnn: int = 1,
         n_txpcnn: int = 1,
         input_feat: int = 2,
@@ -39,21 +35,12 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         pred_seq_len: int = 12,
         kernel_size: int = 3,
         *,
-        cnn: str = "mobilenet_small",
+        cnn: Optional[str] = None,
         pretrained: bool = True,
+        cnn_dropout: float = 0.3,
         **kwargs,
     ):
         super().__init__()
-
-        assert cnn.lower() in MODEL_MAP.keys()
-
-        self.cnn = MODEL_MAP[cnn.lower()](pretrained=pretrained)
-        self.cnn.fc = nn.Sequential(
-            nn.Linear(self.cnn.in_features, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1),
-            nn.Sigmoid(),
-        )
 
         self.n_stgcnn = n_stgcnn
         self.n_txpcnn = n_txpcnn
@@ -75,6 +62,28 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         for _ in range(self.n_txpcnn):
             self.prelus.append(nn.PReLU())
 
+        if cnn is not None:
+            if cnn.lower() not in dir(models):
+                raise ValueError(
+                    f"Invalid model name: {cnn}."
+                    f"Expected one of the following: {dir(models)}"
+                )
+            selected_model: Optional[nn.Module] = getattr(models, cnn.lower())
+            self.cnn = selected_model(pretrained=pretrained)
+            self.cnn.fc = nn.Sequential(
+                nn.Linear(self.cnn.in_features, 64),
+                nn.ReLU(),
+                nn.Linear(64, num_classes),
+                nn.Sigmoid(),
+            )
+        else:
+            self.cnn = EVENT_PREDICTOR_CNN(
+                in_channels=output_feat,
+                num_classes=num_classes,
+                num_events=num_events,
+                dropout=cnn_dropout,
+            )
+
     def forward(self, v, a):
         """
         Feed through model architecture to yield predicted trajectory,
@@ -85,7 +94,8 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
 
         v = v.view(v.shape[0], v.shape[2], v.shape[1], v.shape[3])
 
-        conv_output = self.cnn(v)
+        # Use feature extractor to predict tackler and time of attack
+        event, player, toa = self.cnn(v)
 
         v = self.prelus[0](self.tpcnns[0](v))
 
@@ -95,5 +105,5 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         v = self.tpcnn_ouput(v)
         v = v.view(v.shape[0], v.shape[2], v.shape[1], v.shape[3])
 
-        # Return multi-modal output for trajectory generation and
-        return v, a, conv_output
+        # Return multi-modal output for trajectory generation and time of attack
+        return v, a, (event, player, toa)
