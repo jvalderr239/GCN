@@ -1,9 +1,8 @@
 from typing import Optional
 
 from torch import nn
-from torchvision import models
 
-from .cnn import EVENT_PREDICTOR_CNN
+from .cnn import EVENT_PREDICTOR_CNN, PRETRAINED_EVENT_PREDICTOR_CNN
 from .st_gcn import ST_GCN
 
 
@@ -63,23 +62,16 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
             self.prelus.append(nn.PReLU())
 
         if cnn is not None:
-            if cnn.lower() not in dir(models):
-                raise ValueError(
-                    f"Invalid model name: {cnn}."
-                    f"Expected one of the following: {dir(models)}"
-                )
-            selected_model: Optional[nn.Module] = getattr(models, cnn.lower())
-            self.cnn = selected_model(pretrained=pretrained)
-            self.cnn.fc = nn.Sequential(
-                nn.Linear(self.cnn.in_features, 64),
-                nn.ReLU(),
-                nn.Linear(64, num_classes),
-                nn.Sigmoid(),
+            self.cnn = PRETRAINED_EVENT_PREDICTOR_CNN(
+                in_channels=output_feat,
+                name=cnn,
+                pretrained=pretrained,
+                num_events=num_events,
+                dropout=cnn_dropout,
             )
         else:
             self.cnn = EVENT_PREDICTOR_CNN(
                 in_channels=output_feat,
-                num_classes=num_classes,
                 num_events=num_events,
                 dropout=cnn_dropout,
             )
@@ -92,10 +84,10 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         for k in range(self.n_stgcnn):
             v, a = self.st_gcns[k](v, a)
 
-        v = v.view(v.shape[0], v.shape[2], v.shape[1], v.shape[3])
-
+        print(v.size())
         # Use feature extractor to predict tackler and time of attack
-        event, player, toa = self.cnn(v)
+        simo = self.cnn(v)
+        v = v.view(v.shape[0], v.shape[2], v.shape[1], v.shape[3])
 
         v = self.prelus[0](self.tpcnns[0](v))
 
@@ -106,4 +98,4 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         v = v.view(v.shape[0], v.shape[2], v.shape[1], v.shape[3])
 
         # Return multi-modal output for trajectory generation and time of attack
-        return v, a, (event, player, toa)
+        return v, a, simo
