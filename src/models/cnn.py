@@ -1,4 +1,4 @@
-from typing import Iterable, Union
+from typing import Tuple, Union
 
 from torch import flatten, nn
 from torchvision import models
@@ -8,7 +8,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
     def __init__(
         self,
         in_channels: int,
-        num_events: int = 1,
+        num_events: int = 3,
         dropout: float = 0.3,
         kernel_size: int = 3,
         hidden_fc_dim: int = 128,
@@ -16,44 +16,42 @@ class EVENT_PREDICTOR_CNN(nn.Module):
     ):
         super(EVENT_PREDICTOR_CNN, self).__init__()
 
-        self.conv_layers: nn.ModuleList = [
+        self.conv_layers = [
             EVENT_PREDICTOR_CNN.build_conv_layer(
                 in_c=in_channels, out_c=hidden_fc_dim, kernel_size=kernel_size
             ),
             EVENT_PREDICTOR_CNN.build_conv_layer(
-                hidden_fc_dim, hidden_fc_dim * 2, kernel_size=1
+                hidden_fc_dim, hidden_fc_dim * 4, kernel_size=1
             ),
         ]
 
-        self.fc1 = nn.Linear(hidden_fc_dim * 2, hidden_fc_dim // 2)
+        self.fc1 = nn.Linear(kernel_size * hidden_fc_dim * 4, hidden_fc_dim // 2)
         self.event_type_fc = nn.Sequential(
             nn.Dropout(p=dropout),
-            nn.Linear(in_features=hidden_fc_dim // 2, out_features=num_events),
+            nn.Linear(in_features=(hidden_fc_dim // 2), out_features=num_events),
             nn.Sigmoid(),
         )
         self.node_index_fc = nn.Sequential(
             nn.Dropout(p=dropout),
-            nn.Linear(in_features=hidden_fc_dim // 2, out_features=1),
+            nn.Linear(in_features=(hidden_fc_dim // 2), out_features=1),
         )
         self.time_of_event_fc = nn.Sequential(
             nn.Dropout(p=dropout),
-            nn.Linear(in_features=hidden_fc_dim // 2, out_features=num_events),
+            nn.Linear(in_features=(hidden_fc_dim // 2), out_features=num_events),
             nn.ReLU(),
         )
 
         self.batch = nn.BatchNorm1d(hidden_fc_dim // 2)
         self.drop = nn.Dropout(p=dropout)
-        self.relu = nn.LeakyReLU()
-        if not leaky:
-            self.relu = nn.ReLU()
+        self.relu = nn.ReLU() if not leaky else nn.LeakyReLU()
 
     @staticmethod
     def build_conv_layer(
         in_c,
         out_c,
-        kernel_size: Union[Iterable[int], int] = (3, 3),
+        kernel_size: Union[Tuple[int, int], int] = (3, 3),
         padding: int = 0,
-        output_filt_size: Iterable[int] = (2, 2),
+        output_filt_size: Union[int, Tuple[int, ...]] = (2, 2),
     ):
         return nn.Sequential(
             nn.Conv2d(in_c, out_c, kernel_size=kernel_size, padding=padding, stride=2),
@@ -65,7 +63,8 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         out = x
         for m in self.conv_layers:
             out = m(out)
-        out = self.fc1(out.squeeze().t())
+        out = out.view(out.shape[0], out.shape[2] * out.shape[1])
+        out = self.fc1(out.squeeze())
         out = self.relu(out)
         out = self.batch(out)
         out = self.drop(out)
@@ -106,7 +105,9 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
                 bias=True,
             )
         ]
-        first_conv_layer.extend(list(selected_model.children())[:-1])
+        first_conv_layer.extend(
+            list(selected_model.children())[:-1]
+        )  # pylint-ignore: arg-type
         self.cnn = nn.Sequential(*first_conv_layer)
         self.event_type_fc = nn.Sequential(
             nn.Dropout(p=dropout),
@@ -124,7 +125,6 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
 
     def forward(self, x):
         x = self.cnn(x)
-        print(f"resnet output shape: {x.shape}")
         x = flatten(x, 1)
 
         return {

@@ -24,7 +24,6 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
 
     def __init__(
         self,
-        num_classes: int,
         num_events: int,
         n_stgcnn: int = 1,
         n_txpcnn: int = 1,
@@ -61,20 +60,21 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         for _ in range(self.n_txpcnn):
             self.prelus.append(nn.PReLU())
 
-        if cnn is not None:
-            self.cnn = PRETRAINED_EVENT_PREDICTOR_CNN(
+        self.cnn = (
+            PRETRAINED_EVENT_PREDICTOR_CNN(
                 in_channels=output_feat,
                 name=cnn,
                 pretrained=pretrained,
                 num_events=num_events,
                 dropout=cnn_dropout,
             )
-        else:
-            self.cnn = EVENT_PREDICTOR_CNN(
+            if cnn is not None
+            else EVENT_PREDICTOR_CNN(
                 in_channels=output_feat,
                 num_events=num_events,
                 dropout=cnn_dropout,
             )
+        )
 
     def forward(self, v, a):
         """
@@ -84,8 +84,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         for k in range(self.n_stgcnn):
             v, a = self.st_gcns[k](v, a)
 
-        print(v.size())
-        # Use feature extractor to predict tackler and time of attack
+        # Use feature extractor to predict tackle, tackler and time of attack
         simo = self.cnn(v)
         v = v.view(v.shape[0], v.shape[2], v.shape[1], v.shape[3])
 
