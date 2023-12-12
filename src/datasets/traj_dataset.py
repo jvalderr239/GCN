@@ -43,6 +43,7 @@ class TrajectoryDataset(Dataset):
 
     def __init__(
         self,
+        datatype: str,
         obs_len=25,
         pred_len=30,
         *,
@@ -51,7 +52,7 @@ class TrajectoryDataset(Dataset):
         batch_size=1,
         norm_lap_matr=True,
         shuffle=True,
-        root_dir: str = "../../resources/nfl-big-data-bowl-2024/",
+        root_dir: str = "../../resources/",
     ):
         """
         Args:
@@ -66,12 +67,18 @@ class TrajectoryDataset(Dataset):
         """
         super(TrajectoryDataset, self).__init__()
 
+        assert datatype in ("train", "validation", "test"), (
+            "Datatype needs to be one " "of the following: (train, validation, test)"
+        )
         assert max_frames >= min_frames, "min_frames must be greater than max_frames"
 
         # Extract appropriate data by frame range
         self.min_frames, self.max_frames = min_frames, max_frames
         self.data, fmax, fmin = TrajectoryDataset.read_tracking_data(
-            root_dir=root_dir, min_frames=self.min_frames, max_frames=self.max_frames
+            root_dir=root_dir,
+            datatype=datatype,
+            min_frames=self.min_frames,
+            max_frames=self.max_frames,
         )
         log.info(
             f"Processing {len(self.data)} plays ranging from  {self.min_frames} to {self.max_frames} lengths..."
@@ -121,6 +128,7 @@ class TrajectoryDataset(Dataset):
     @staticmethod
     def read_tracking_data(
         root_dir: str,
+        datatype: str,
         min_frames: int,
         max_frames: int,
     ):
@@ -139,7 +147,7 @@ class TrajectoryDataset(Dataset):
 
         # Concatenate all tracking data csvs into single dataframe
         tracking_files = []
-        for tracking_filename in glob(root_dir + "tracking*.csv"):
+        for tracking_filename in glob(root_dir + f"{datatype}.csv"):
             file = pd.read_csv(tracking_filename)
         tracking_files.append(file)
         tracking_df = pd.concat(tracking_files, ignore_index=True)

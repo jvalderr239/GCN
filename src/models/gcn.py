@@ -62,8 +62,6 @@ class GCN(nn.Module):
         )
 
     def forward(self, x, A):
-        print(A.size())
-        print(self.kernel_size)
         assert A.size(0) == self.kernel_size
         x = self.conv(x)
         x = einsum("nctv,tvw->nctw", (x, A))

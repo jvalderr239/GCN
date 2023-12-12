@@ -1,6 +1,6 @@
 from typing import Tuple, Union
 
-from torch import flatten, nn
+from torch import flatten, nn, randn
 from torchvision import models
 
 
@@ -83,21 +83,61 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         name: str,
         pretrained: bool,
         num_events: int = 1,
+        kernel_size: int = 3,
         dropout: float = 0.3,
     ):
         super(PRETRAINED_EVENT_PREDICTOR_CNN, self).__init__()
+
+        self.cnn, cnn_output_dim = self._get_base_model(
+            name=name.lower(),
+            pretrained=pretrained,
+            in_channels=in_channels,
+            kernel_size=kernel_size,
+        )
+        self.event_type_fc = nn.Sequential(
+            nn.Dropout(p=dropout),
+            nn.Linear(in_features=cnn_output_dim, out_features=num_events),
+            nn.Sigmoid(),
+        )
+        self.node_index_fc = nn.Sequential(
+            nn.Dropout(p=dropout), nn.Linear(in_features=cnn_output_dim, out_features=1)
+        )
+        self.time_of_event_fc = nn.Sequential(
+            nn.Dropout(p=dropout),
+            nn.Linear(in_features=cnn_output_dim, out_features=num_events),
+            nn.ReLU(),
+        )
+
+    def _get_base_model(
+        self,
+        name: str,
+        pretrained: bool,
+        in_channels: int,
+        kernel_size: int,
+    ):
+        """
+        Generate base model and reformat with convolutional layer to reshape as
+        expected input size
+
+        Raises:
+            ValueError: If model name is invalid and cannot be pulled from torch
+
+        Returns:
+            Tuple containing model and output size
+        """
         if name.lower() not in dir(models):
             raise ValueError(
                 f"Invalid model name: {name}."
                 f"Expected one of the following: {dir(models)}"
             )
+        if "resnet" not in name.lower():
+            raise ValueError("Currently, there is only support for ResNet backbones...")
         selected_model: nn.Module = getattr(models, name.lower())(pretrained=pretrained)
-        # self.cnn = nn.Sequential(*(list(selected_model.children())[:-1]))
         first_conv_layer = [
             nn.Conv2d(
                 in_channels=in_channels,
                 out_channels=3,
-                kernel_size=3,
+                kernel_size=kernel_size,
                 stride=1,
                 padding=0,
                 dilation=1,
@@ -108,25 +148,16 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         first_conv_layer.extend(
             list(selected_model.children())[:-1]
         )  # pylint-ignore: arg-type
-        self.cnn = nn.Sequential(*first_conv_layer)
-        self.event_type_fc = nn.Sequential(
-            nn.Dropout(p=dropout),
-            nn.Linear(in_features=512, out_features=num_events),
-            nn.Sigmoid(),
-        )
-        self.node_index_fc = nn.Sequential(
-            nn.Dropout(p=dropout), nn.Linear(in_features=512, out_features=1)
-        )
-        self.time_of_event_fc = nn.Sequential(
-            nn.Dropout(p=dropout),
-            nn.Linear(in_features=512, out_features=num_events),
-            nn.ReLU(),
-        )
+        base_model = nn.Sequential(*first_conv_layer)
+
+        # get output shape
+        x = randn(1, in_channels, 56, 22)
+        output_dim = base_model(x).size(1)
+        return base_model, output_dim
 
     def forward(self, x):
         x = self.cnn(x)
         x = flatten(x, 1)
-
         return {
             "event_type": self.event_type_fc(x),
             "node_index": self.node_index_fc(x),

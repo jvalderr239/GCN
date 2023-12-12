@@ -28,7 +28,8 @@ setup(
         "tqdm==4.64.1",
         "numpy>=1.24, <1.26",
         "protobuf",
-        "networkx"
+        "networkx",
+        "fire",
         "nfl_data_py"
     ],
     extras_require={
