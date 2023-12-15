@@ -2,6 +2,7 @@
 import logging
 import logging.config
 import math
+import os
 from enum import IntEnum
 from glob import glob
 
@@ -12,8 +13,9 @@ import torch
 from torch.utils.data import Dataset
 
 # setup logger
-logging.config.fileConfig("logging.conf")
-log = logging.getLogger(__name__)
+# log_file_path = "../../logging.conf"
+# logging.config.fileConfig(log_file_path)
+# log = logging.getLogger(__name__)
 
 
 class DATA_COLUMNS(IntEnum):
@@ -74,32 +76,36 @@ class TrajectoryDataset(Dataset):
 
         # Extract appropriate data by frame range
         self.min_frames, self.max_frames = min_frames, max_frames
-        self.data, fmax, fmin = TrajectoryDataset.read_tracking_data(
+        tracking_df, self.data, fmax, fmin = TrajectoryDataset.read_tracking_data(
             root_dir=root_dir,
             datatype=datatype,
             min_frames=self.min_frames,
             max_frames=self.max_frames,
         )
-        log.info(
+        print(
             f"Processing {len(self.data)} plays ranging from  {self.min_frames} to {self.max_frames} lengths..."
         )
-        log.info(f"Data includes frame lengths starting from {fmin} to {fmax}")
+        print(f"Data includes frame lengths starting from {fmin} to {fmax}")
 
         # Keep track of relevant data from csv
-        self.games_df = pd.read_csv(root_dir + "games.csv")
-        self.players_df = pd.read_csv(root_dir + "players.csv")
-        self.plays_df = pd.read_csv(root_dir + "plays.csv")
-        self.tackles_df = pd.read_csv(root_dir + "tackles.csv")
+        data_dir = root_dir + "nfl-big-data-bowl-2024/"
+        self.games_df = pd.read_csv(data_dir + "games.csv")
+        self.players_df = pd.read_csv(data_dir + "players.csv")
+        self.plays_df = pd.read_csv(data_dir + "plays.csv")
+        self.tackles_df = pd.read_csv(data_dir + "tackles.csv")
 
         # Get player relevant attributes
         self.player_attributes = self.players_df.set_index("nflId")
         self.max_weight = self.player_attributes["weight"].values.max()
         self.min_weight = self.player_attributes["weight"].values.min()
         self.mean_speed, self.std_speed = (
-            self.data[["s"]].mean(),
-            self.data[["s"]].std(),
+            tracking_df[["s"]].mean(),
+            tracking_df[["s"]].std(),
         )
-        self.mean_acc, self.std_acc = self.data[["s"]].mean(), self.data[["s"]].std()
+        self.mean_acc, self.std_acc = (
+            tracking_df[["s"]].mean(),
+            tracking_df[["s"]].std(),
+        )
 
         # Attributes for input sequence lengths
         self.obs_len = obs_len
@@ -117,7 +123,8 @@ class TrajectoryDataset(Dataset):
         return int(np.floor(len(self.data) / self.batch_size))
 
     def __getitem__(self, index):
-        return self.__process_data(index)
+        random_index = self.indexes[index]
+        return self.__process_data(random_index)
 
     def on_epoch_end(self):
         "Shuffles indexes after each epoch"
@@ -160,26 +167,32 @@ class TrajectoryDataset(Dataset):
         # Collect data by gameId and playId
         frame_data = {}
         frame_max, frame_min = -1, 100000
-        num_game_play = len(tracking_df.groupby(["gameId", "playId"]))
-        for idx, (_, grouped_game) in enumerate(
-            tracking_df.groupby(["gameId", "playId"])
-        ):
+        index = 0
+        for _, grouped_game in tracking_df.groupby(["gameId", "playId"]):
             current_frames = []
+            # Filter by tackle sequences
             if "tackle" not in grouped_game["event"].values:
                 continue
-
-            if min_frames > len(grouped_game["frameId"].unique()) > max_frames:
+            # Filter by sequence length
+            num_sequences = len(grouped_game["frameId"].unique())
+            if not (min_frames <= num_sequences <= max_frames):
                 continue
-            frame_max = max(frame_max, len(grouped_game["frameId"].unique()))
-            frame_min = min(frame_min, len(grouped_game["frameId"].unique()))
+
+            frame_max = max(frame_max, num_sequences)
+            frame_min = min(frame_min, num_sequences)
             frames = grouped_game["frameId"].unique()
             for frame in frames:
                 current_frames.append(grouped_game[grouped_game.frameId == frame])
 
-            frame_data[idx] = current_frames
-            frame_data[num_game_play + idx] = current_frames[::-1]
+            frame_data[index] = current_frames
+            index += 1
 
-        return frame_data, frame_max, frame_min
+        # Add augmentations as reversed forms of original sequence
+        for _, frames in frame_data.copy().items():
+            frame_data[index] = frames[::-1]
+            index += 1
+
+        return tracking_df, frame_data, frame_max, frame_min
 
     def __process_data(self, index: int):
         """

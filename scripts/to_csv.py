@@ -1,3 +1,5 @@
+import logging
+import logging.config
 import random
 
 import pandas as pd
@@ -5,6 +7,10 @@ from fire import Fire
 from tqdm import tqdm
 
 from src.datasets import TrajectoryDataset as dataset
+
+# setup logger
+logging.config.fileConfig("logging.conf")
+log = logging.getLogger(__name__)
 
 
 def generate_csv(
@@ -23,6 +29,8 @@ def generate_csv(
         min_frames=min_frames,
         max_frames=max_frames,
     )
+    log.info(f"Working with frame size range {fmin} -> {fmin}")
+    random.seed(seed)
     random.shuffle(frame_data)
     train_size = int(len(frame_data) * split)
     val_size = int((len(frame_data) - train_size) * 0.5)
