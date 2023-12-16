@@ -1,7 +1,6 @@
 import dataclasses
 import logging
 import logging.config
-from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 import torch
@@ -27,22 +26,22 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 @dataclasses.dataclass
 class Trainer:
     # Model parameters
-    num_events: int = 3
+    num_events: int = 2
     num_nodes: int = 22
     num_spatial: int = 1
-    num_temporal: int = 1
-    num_features: int = 2
+    num_temporal: int = 5
+    num_features: int = 17
     output_feat: int = 5
-    seq_len: int = 8
-    pred_seq_len: int = 12
+    seq_len: int = 25
+    pred_seq_len: int = 30
     kernel_size: int = 3
     cnn_name: Optional[str] = None
     pretrained: bool = True
     cnn_dropout: float = 0.3
+    clip: float = 1.0
 
     # Train parameters
     lr: float = 0.001
-    checkpoint_dir = f"{str(ROOT_DIR)}/train_results/checkpoint/{datetime.now()}/"
     root_dir: str = str(ROOT_DIR / "resources") + "/"
 
     def update(self, arg, value):
@@ -58,15 +57,18 @@ def generate_dataloader(
     shuffle=False,
     num_workers: int = 0,
     root_dir: Optional[str] = None,
+    **kwargs,
 ) -> DataLoader:
-    dataset = generate_trajectory_dataset(datatype=datatype, root_dir=root_dir)
+    dataset = generate_trajectory_dataset(
+        datatype=datatype, root_dir=root_dir, **kwargs
+    )
     return DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
     )
 
 
 def generate_trajectory_dataset(
-    datatype: str, root_dir: Optional[str] = None
+    datatype: str, obs_len: int, pred_len: int, root_dir: Optional[str] = None
 ) -> Dataset:
     if datatype not in ("train", "validation", "test"):
         raise ValueError("Invalid datatype. Expected one of(train, validation, test)")
@@ -75,7 +77,9 @@ def generate_trajectory_dataset(
         root_dir = str(ROOT_DIR / "resources") + "/"
         log.debug(f"Defaulting to root: {root_dir}")
 
-    return TrajectoryDataset(datatype=datatype, root_dir=root_dir)
+    return TrajectoryDataset(
+        datatype=datatype, root_dir=root_dir, obs_len=obs_len, pred_len=pred_len
+    )
 
 
 def criterion(outputs: Tuple[torch.Tensor, torch.Tensor], truth_labels: Dict[str, Any]):
@@ -89,15 +93,21 @@ def criterion(outputs: Tuple[torch.Tensor, torch.Tensor], truth_labels: Dict[str
 
     # Trajectory loss
     V_pred, simo = outputs
-    V_truth, _ = truth_labels.pop("trajectory"), truth_labels.pop("graph")
+    V_truth, _ = truth_labels["trajectory"], truth_labels["graph"]
+    # Convert output feat
     V_truth = V_truth.squeeze()
-    V_pred = V_pred.squeeze()
+    V_pred = V_pred.squeeze().permute(0, 2, 3, 1)
 
     losses += bivariate_graph_loss(V_pred, V_truth)
-
+    print(f"Bivariate: {losses}")
     # CNN Prediction loss
     for _, (key, pred) in enumerate(simo.items()):
+        print(f"{key} pred: {pred.shape}")
+        print(f"{key} pred: {pred}")
+        print(f"{key} truth: {truth_labels[key].shape}")
+        print(f"{key} truth: {truth_labels[key]}")
         losses += loss_map[key](pred, truth_labels[key].to(device))
+        log.info(f"{key} loss: {losses}")
 
     return losses
 
@@ -108,6 +118,7 @@ def train_one_epoch(
     training_loader: DataLoader,
     optimizer: Optimizer,
     tb_writer: SummaryWriter,
+    clip: float,
 ):
     running_loss = 0.0
     last_loss = 0.0
@@ -132,12 +143,10 @@ def train_one_epoch(
         # Make predictions for this batch
         V_pred, _, simo = model(V_obs_tmp, A_obs.squeeze())
 
-        V_pred = V_pred.permute(0, 2, 3, 1)
-
         # Compute the loss and its gradients
         loss = criterion((V_pred, simo), truth_labels.copy())
         loss.backward()
-
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip)
         # Adjust learning weights
         optimizer.step()
 

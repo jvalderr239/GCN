@@ -26,7 +26,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
             ),
         ]
 
-        self.fc1 = nn.Linear(kernel_size * hidden_fc_dim * 4, hidden_fc_dim // 2)
+        self.fc1 = nn.Linear(hidden_fc_dim * 4, hidden_fc_dim // 2)
         self.event_type_fc = nn.Sequential(
             nn.Dropout(p=dropout),
             nn.Linear(in_features=(hidden_fc_dim // 2), out_features=num_events),
@@ -35,6 +35,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         self.node_index_fc = nn.Sequential(
             nn.Dropout(p=dropout),
             nn.Linear(in_features=(hidden_fc_dim // 2), out_features=num_nodes),
+            nn.Sigmoid(),
         )
         self.time_of_event_fc = nn.Sequential(
             nn.Dropout(p=dropout),
@@ -104,6 +105,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         self.node_index_fc = nn.Sequential(
             nn.Dropout(p=dropout),
             nn.Linear(in_features=cnn_output_dim, out_features=num_nodes),
+            nn.Sigmoid(),
         )
         self.time_of_event_fc = nn.Sequential(
             nn.Dropout(p=dropout),
@@ -146,7 +148,8 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
                 dilation=1,
                 groups=1,
                 bias=True,
-            )
+            ),
+            nn.MaxPool2d(kernel_size=2, stride=2),
         ]
         first_conv_layer.extend(
             list(selected_model.children())[:-1]

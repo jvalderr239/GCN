@@ -354,12 +354,12 @@ class TrajectoryDataset(Dataset):
         # convert from (batch_size, frames, num_nodes, num_features)
         # to the expected format (batch_size, num_features, frames, num_nodes)
         obs_traj, obs_truth = (
-            data[:, : self.obs_len + 1],
-            data[:, self.obs_len + 1 : self.pred_len],
+            data[:, : self.obs_len],
+            data[:, self.obs_len : self.obs_len + self.pred_len],
         )
         graph_traj, graph_truth = (
-            graph[: self.obs_len + 1],
-            graph[self.obs_len + 1 : self.pred_len],
+            graph[: self.obs_len],
+            graph[self.obs_len : self.obs_len + self.pred_len],
         )
         return {
             "data": [

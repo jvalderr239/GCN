@@ -62,7 +62,11 @@ class GCN(nn.Module):
         )
 
     def forward(self, x, A):
-        assert A.size(0) == self.kernel_size
+        assert (
+            A.size(1) == self.kernel_size
+            if len(A.size()) > 3
+            else A.size(0) == self.kernel_size
+        )
         x = self.conv(x)
-        x = einsum("nctv,tvw->nctw", (x, A))
+        x = einsum("nctv,ntvw->nctw", (x, A))
         return x.contiguous(), A

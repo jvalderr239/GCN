@@ -8,8 +8,8 @@ from fire import Fire
 from torch.utils.tensorboard import SummaryWriter
 
 from src import train_utils
-from src.models.social_collision_stgcnn import \
-    SOCIAL_COLLISION_STGCNN as social_c_stgcnn
+from src.metrics import checkpoint
+from src.models.social_collision_stgcnn import SOCIAL_COLLISION_STGCNN as mimo
 from src.utils import get_project_root
 
 # setup logger
@@ -18,12 +18,13 @@ logging.config.fileConfig(str(log_file_path))
 log = logging.getLogger(__name__)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+log.info(f"Working with {device} for training")
 
 
-def train(epochs: int, **kwargs):
+def train(epochs: int, batch_size: int = 1, **kwargs):
     # Defining the model
     trainer = train_utils.Trainer(**kwargs)
-    model = social_c_stgcnn(
+    model = mimo(
         num_events=trainer.num_events,
         n_stgcnn=trainer.num_spatial,
         n_txpcnn=trainer.num_temporal,
@@ -36,40 +37,41 @@ def train(epochs: int, **kwargs):
         cnn=trainer.cnn_name,
         pretrained=trainer.pretrained,
         cnn_dropout=trainer.cnn_dropout,
-    ).cuda()
+    ).to(device=device)
 
     # Training settings
+
+    loader_train = train_utils.generate_dataloader(
+        "train",
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,
+        root_dir=trainer.root_dir,
+        obs_len=trainer.seq_len,
+        pred_len=trainer.pred_seq_len,
+    )
+    loader_val = train_utils.generate_dataloader(
+        "validation",
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=1,
+        root_dir=trainer.root_dir,
+        obs_len=trainer.seq_len,
+        pred_len=trainer.pred_seq_len,
+    )
 
     optimizer = torch.optim.SGD(model.parameters(), lr=trainer.lr)
     scheduler = trainer.get_scheduler(optimizer=optimizer)
 
-    loader_train = train_utils.generate_dataloader(
-        "train", batch_size=8, shuffle=True, num_workers=0, root_dir=trainer.root_dir
-    )
-    loader_val = train_utils.generate_dataloader(
-        "validation",
-        batch_size=8,
-        shuffle=False,
-        num_workers=1,
-        root_dir=trainer.root_dir,
-    )
-
-    if not os.path.exists(trainer.checkpoint_dir):
-        os.makedirs(trainer.checkpoint_dir)
-
-    checkpoint = torch.load(trainer.checkpoint_dir)
-    model.load_state_dict(checkpoint["model_state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-
     # Initializing in a separate cell so we can easily add more epochs to the same run
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     writer = SummaryWriter(
-        f"{str(get_project_root())}/train_results/runs/stgcnn_{timestamp}"
+        f"{str(get_project_root())}/train_results/runs/social_collision_stgcnn_{timestamp}"
     )
-    epoch_number = 0
 
     best_vloss = 1_000_000.0
-
+    early_stop_thresh = 10
+    log.info(f"Training for {epochs} epochs")
     for epoch_number in range(epochs):
         log.info(f"EPOCH {epoch_number + 1}:")
 
@@ -81,6 +83,7 @@ def train(epochs: int, **kwargs):
             training_loader=loader_train,
             optimizer=optimizer,
             tb_writer=writer,
+            clip=trainer.clip,
         )
 
         running_vloss = 0.0
@@ -108,6 +111,10 @@ def train(epochs: int, **kwargs):
         avg_vloss = running_vloss / (iv + 1)
         log.info(f"LOSS train {avg_loss} valid {avg_vloss}".format(avg_loss, avg_vloss))
 
+        before_lr = optimizer.param_groups[0]["lr"]
+        scheduler.step()
+        after_lr = optimizer.param_groups[0]["lr"]
+        log.info(f"Epoch {epoch_number}: SGD lr {before_lr:.4} -> {after_lr:.4}")
         # Log the running loss averaged per batch
         # for both training and validation
         writer.add_scalars(
@@ -120,11 +127,14 @@ def train(epochs: int, **kwargs):
         # Track best performance, and save the model's state
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
-            model_path = f"{str(get_project_root())}/train_results/model_{timestamp}_{epoch_number}"
-            torch.save(model.state_dict(), model_path)
-
+            best_epoch = epoch_number
+            model_path = f"{str(get_project_root())}/train_results/social_collision_stgcnn_{timestamp}_{epoch_number}.pt"
+            checkpoint(model, model)
+        elif epoch_number - best_epoch > early_stop_thresh:
+            log.warning(f"Early stopped training at epoch {epoch_number}")
+            break  # terminate the training loop
         epoch_number += 1
 
 
-if __name__ == "main":
+if __name__ == "__main__":
     Fire(train)
