@@ -8,6 +8,7 @@ from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 from .datasets import TrajectoryDataset
 from .metrics import criterion
@@ -106,9 +107,9 @@ def train_one_epoch(
     # Here, we use enumerate(training_loader) instead of
     # iter(training_loader) so that we can track the batch
     # index and do some intra-epoch reporting
-    for i, batch_data in enumerate(training_loader):
+    for i, batch_data in enumerate((pbar := tqdm(training_loader))):
         # Every data instance is an input + label pair
-
+        pbar.set_description(f"{i+1}/{n_total_steps} batches")
         V_obs, A_obs = batch_data["data"]
         truth_labels = batch_data["labels"]
 

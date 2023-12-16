@@ -205,8 +205,10 @@ class TrajectoryDataset(Dataset):
         frame_max, frame_min = -1, 100000
         index = 0
 
-        log.info("Grouping temporal sequences")
-        for _, grouped_game in tqdm(tracking_df.groupby(["gameId", "playId"])):
+        for _, grouped_game in (
+            pbar := tqdm(tracking_df.groupby(["gameId", "playId"]))
+        ):
+            pbar.set_description()
             current_frames = []
             # Filter by tackle sequences
             if "tackle" not in grouped_game["event"].values:

@@ -5,6 +5,7 @@ from datetime import datetime
 import torch
 from fire import Fire
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 from src import train_utils
 from src.models.social_collision_stgcnn import SOCIAL_COLLISION_STGCNN as mimo
@@ -58,7 +59,7 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
         num_spatial_nodes=trainer.num_spatial_features,
         n_stgcnn=trainer.num_spatial,
         n_txpcnn=trainer.num_temporal,
-        input_feat=trainer.num_spatial_features,
+        input_feat=trainer.num_features,
         input_cnn_feat=trainer.num_features
         - trainer.num_spatial_features
         + trainer.output_feat,
@@ -85,8 +86,8 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
     best_vloss = 1_000_000.0
     early_stop_thresh = 10
     log.info(f"Training for {epochs} epochs")
-    for epoch_number in range(epochs):
-        log.info(f"EPOCH {epoch_number + 1}:")
+    for epoch_number in (pbar := tqdm(range(epochs))):
+        pbar.set_description(f"EPOCH {epoch_number + 1}:")
 
         # Make sure gradient tracking is on, and do a pass over the data
         stgcnn_model.train(True)

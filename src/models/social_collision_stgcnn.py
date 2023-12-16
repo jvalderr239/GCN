@@ -100,7 +100,6 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
             adjacency matrix and predicted time of attack (TOA)
         """
         v_original = v.clone()
-        v = v[:, : self.num_spatial_nodes]
         for k in range(self.n_stgcnn):
             v, a = self.st_gcns[k](v, a)
 
