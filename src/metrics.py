@@ -1,13 +1,33 @@
+from typing import Any, Dict, Tuple
+
 import numpy as np
 import torch
 
 
-def checkpoint(model, filename):
-    torch.save(model.state_dict(), filename)
+def criterion(
+    outputs: Tuple[torch.Tensor, Dict[str, Any]], truth_labels: Dict[str, Any], device
+):
+    loss_map: Dict[str, Any] = {
+        "node_index": torch.nn.BCELoss(),
+        "event_type": torch.nn.BCELoss(),
+        "time_of_event": torch.nn.MSELoss(),
+    }
 
+    losses = 0
 
-def resume(model, filename):
-    model.load_state_dict(torch.load(filename))
+    # Trajectory loss
+    V_pred, simo = outputs
+    V_truth, _ = truth_labels["trajectory"], truth_labels["graph"]
+    # Convert output feat
+    V_truth = V_truth.squeeze()
+    V_pred = V_pred.squeeze().permute(0, 2, 3, 1)
+
+    losses += bivariate_graph_loss(V_pred, V_truth)
+    # CNN Prediction loss
+    for _, (key, pred) in enumerate(simo.items()):  # pylint-ignore: attr-defined
+        losses += loss_map[key](pred, truth_labels[key].to(device))
+
+    return losses
 
 
 def bivariate_graph_loss(V_pred: torch.Tensor, V_trgt: torch.Tensor):

@@ -1,17 +1,16 @@
 import dataclasses
 import logging
 import logging.config
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 import torch
-import torch.optim.lr_scheduler as lr_scheduler
 from torch import nn
-from torch.optim import Optimizer
+from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 
 from .datasets import TrajectoryDataset
-from .metrics import bivariate_graph_loss
+from .metrics import criterion
 from .utils import get_project_root
 
 # setup logger
@@ -20,17 +19,13 @@ log_file_path = ROOT_DIR / "logging.conf"
 logging.config.fileConfig(str(log_file_path))
 log = logging.getLogger(__name__)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 
 @dataclasses.dataclass
 class Trainer:
     # Model parameters
     num_events: int = 2
-    num_nodes: int = 22
     num_spatial: int = 1
     num_temporal: int = 5
-    num_features: int = 17
     output_feat: int = 5
     seq_len: int = 25
     pred_seq_len: int = 30
@@ -38,10 +33,15 @@ class Trainer:
     cnn_name: Optional[str] = None
     pretrained: bool = True
     cnn_dropout: float = 0.3
-    clip: float = 1.0
+    clip: Optional[float] = None
+
+    # Dataset parameters
+    num_features = 21
+    num_spatial_features = 7
+    num_nodes = 22
 
     # Train parameters
-    lr: float = 0.001
+    lr: float = 0.01
     root_dir: str = str(ROOT_DIR / "resources") + "/"
 
     def update(self, arg, value):
@@ -82,34 +82,12 @@ def generate_trajectory_dataset(
     )
 
 
-def criterion(outputs: Tuple[torch.Tensor, torch.Tensor], truth_labels: Dict[str, Any]):
-    loss_map: Dict[str, nn.NLLLoss] = {
-        "node_index": nn.BCELoss(),
-        "event_type": nn.BCELoss(),
-        "time_of_event": nn.MSELoss(),
-    }
+def checkpoint(model, filename):
+    torch.save(model.state_dict(), filename)
 
-    losses = 0
 
-    # Trajectory loss
-    V_pred, simo = outputs
-    V_truth, _ = truth_labels["trajectory"], truth_labels["graph"]
-    # Convert output feat
-    V_truth = V_truth.squeeze()
-    V_pred = V_pred.squeeze().permute(0, 2, 3, 1)
-
-    losses += bivariate_graph_loss(V_pred, V_truth)
-    print(f"Bivariate: {losses}")
-    # CNN Prediction loss
-    for _, (key, pred) in enumerate(simo.items()):
-        print(f"{key} pred: {pred.shape}")
-        print(f"{key} pred: {pred}")
-        print(f"{key} truth: {truth_labels[key].shape}")
-        print(f"{key} truth: {truth_labels[key]}")
-        losses += loss_map[key](pred, truth_labels[key].to(device))
-        log.info(f"{key} loss: {losses}")
-
-    return losses
+def resume(model, filename):
+    model.load_state_dict(torch.load(filename))
 
 
 def train_one_epoch(
@@ -118,7 +96,8 @@ def train_one_epoch(
     training_loader: DataLoader,
     optimizer: Optimizer,
     tb_writer: SummaryWriter,
-    clip: float,
+    clip: Optional[float],
+    device: Any,
 ):
     running_loss = 0.0
     last_loss = 0.0
@@ -144,16 +123,17 @@ def train_one_epoch(
         V_pred, _, simo = model(V_obs_tmp, A_obs.squeeze())
 
         # Compute the loss and its gradients
-        loss = criterion((V_pred, simo), truth_labels.copy())
+        loss = criterion((V_pred, simo), truth_labels.copy(), device)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip)
+        if clip is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip)
         # Adjust learning weights
         optimizer.step()
 
         # Gather data and report
         running_loss += loss.item()
 
-        if (i + 1) % (int(n_total_steps / 1)) == 0:
+        if (i + 1) % (int(n_total_steps)) == 0:
             last_loss = running_loss / 1000  # loss per batch
             log.debug(f"batch {i + 1} loss: {last_loss}")
             tb_x = epoch_index * len(training_loader) + i + 1

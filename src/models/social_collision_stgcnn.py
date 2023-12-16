@@ -2,8 +2,8 @@ import logging
 import logging.config
 from typing import Optional
 
+import torch
 from torch import nn
-from torchsummary import summary
 
 from src.utils import get_project_root
 
@@ -36,9 +36,11 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         self,
         num_events: int,
         num_nodes: int,
+        num_spatial_nodes: int,
         n_stgcnn: int = 1,
         n_txpcnn: int = 1,
         input_feat: int = 2,
+        input_cnn_feat: int = 15,
         output_feat: int = 5,
         seq_len: int = 8,
         pred_seq_len: int = 12,
@@ -51,6 +53,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
     ):
         super().__init__()
 
+        self.num_spatial_nodes = num_spatial_nodes
         self.n_stgcnn = n_stgcnn
         self.n_txpcnn = n_txpcnn
 
@@ -74,7 +77,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
 
         self.cnn = (
             PRETRAINED_EVENT_PREDICTOR_CNN(
-                in_channels=output_feat,
+                in_channels=input_cnn_feat,
                 name=cnn,
                 pretrained=pretrained,
                 num_events=num_events,
@@ -83,24 +86,28 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
             )
             if cnn is not None
             else EVENT_PREDICTOR_CNN(
-                in_channels=output_feat,
+                in_channels=input_cnn_feat,
                 num_events=num_events,
                 num_nodes=num_nodes,
                 dropout=cnn_dropout,
             )
         )
-        log.info(f"Built cnn model for prediction")
+        log.info(f"Built {self.cnn.name} model for prediction")
 
     def forward(self, v, a):
         """
         Feed through model architecture to yield predicted trajectory,
             adjacency matrix and predicted time of attack (TOA)
         """
+        v_original = v.clone()
+        v = v[:, : self.num_spatial_nodes]
         for k in range(self.n_stgcnn):
             v, a = self.st_gcns[k](v, a)
 
         # Use feature extractor to predict tackle, tackler and time of attack
-        simo = self.cnn(v)
+        # Use the spatial node output along with categorical features
+        cnn_input = torch.concat((v, v_original[:, self.num_spatial_nodes :]), dim=1)
+        simo = self.cnn(cnn_input)
         v = v.view(v.shape[0], v.shape[2], v.shape[1], v.shape[3])
 
         v = self.prelus[0](self.tpcnns[0](v))

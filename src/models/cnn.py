@@ -15,7 +15,8 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         hidden_fc_dim: int = 128,
         leaky: bool = True,
     ):
-        super(EVENT_PREDICTOR_CNN, self).__init__()
+        super().__init__()
+        self.name = self.__class__
 
         self.conv_layers = [
             EVENT_PREDICTOR_CNN.build_conv_layer(
@@ -70,11 +71,11 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         out = self.relu(out)
         out = self.batch(out)
         out = self.drop(out)
-
+        out = out.unsqueeze(1)
         return {
             "event_type": self.event_type_fc(out),
             "node_index": self.node_index_fc(out),
-            "time_of_attack": self.time_of_event_fc(out),
+            "time_of_event": self.time_of_event_fc(out),
         }
 
 
@@ -89,8 +90,8 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         kernel_size: int = 3,
         dropout: float = 0.3,
     ):
-        super(PRETRAINED_EVENT_PREDICTOR_CNN, self).__init__()
-
+        super().__init__()
+        self.name = self.__class__
         self.cnn, cnn_output_dim = self._get_base_model(
             name=name.lower(),
             pretrained=pretrained,
@@ -164,8 +165,9 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
     def forward(self, x):
         x = self.cnn(x)
         x = flatten(x, 1)
+        x = x.unsqueeze(1)
         return {
             "event_type": self.event_type_fc(x),
             "node_index": self.node_index_fc(x),
-            "time_of_attack": self.time_of_event_fc(x),
+            "time_of_event": self.time_of_event_fc(x),
         }

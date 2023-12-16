@@ -3,7 +3,6 @@ import logging.config
 import math
 from enum import IntEnum
 from glob import glob
-from typing import Dict, List
 
 import networkx as nx
 import numpy as np
@@ -56,7 +55,13 @@ class TrajectoryDataset(Dataset):
         batch_size=1,
         norm_lap_matr=True,
         shuffle=True,
+        field_width: float = 53.3,  # yards
+        field_length: float = 120,  # yards
+        max_player_angle: float = 360.0,  # degrees
+        num_downs: int = 4,
+        num_first_down_yards: int = 10,
         root_dir: str = "../../resources/",
+        seed=239,
     ):
         """
         Args:
@@ -69,25 +74,29 @@ class TrajectoryDataset(Dataset):
         - shuffle: Whether to shuffle indices at each epoch
         - root_dir: Location of NFL Big Data csvs
         """
-        super(TrajectoryDataset, self).__init__()
+        super().__init__()
 
         assert datatype in ("train", "validation", "test"), (
             "Datatype needs to be one " "of the following: (train, validation, test)"
         )
         assert max_frames >= min_frames, "min_frames must be greater than max_frames"
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
         # Extract appropriate data by frame range
-        self.min_frames, self.max_frames = min_frames, max_frames
-        tracking_df, frame_data, fmax, fmin = TrajectoryDataset.read_tracking_data(
-            root_dir=root_dir,
-            datatype=datatype,
-            min_frames=self.min_frames,
-            max_frames=self.max_frames,
-        )
-        log.info(
-            f"Processing {len(frame_data)} plays ranging from  {self.min_frames} to {self.max_frames} lengths..."
-        )
-        log.info(f"Data includes frame lengths starting from {fmin} to {fmax}")
+        self.field_width, self.field_length = field_width, field_length
+        self._frame_features = ["x", "y", "dis", "o", "dir", "time"]
+        self._plays_features = [
+            "yardsToGo",
+            "quarter",
+            "passProbability",
+            "defendersInTheBox",
+            "defendersInTheBox",
+            "absoluteYardlineNumber",
+            "club",
+            "ballCarrierId",
+        ]
+        self._games_features = ["homeTeamAbbr", "club", "possessionTeam"]
 
         # Keep track of relevant data from csv
         data_dir = root_dir + "nfl-big-data-bowl-2024/"
@@ -95,6 +104,19 @@ class TrajectoryDataset(Dataset):
         self.players_df = pd.read_csv(data_dir + "players.csv")
         self.plays_df = pd.read_csv(data_dir + "plays.csv")
         self.tackles_df = pd.read_csv(data_dir + "tackles.csv")
+
+        self.min_frames, self.max_frames = min_frames, max_frames
+        tracking_df, frame_data, fmax, fmin = self.read_tracking_data(
+            root_dir=root_dir,
+            datatype=datatype,
+            min_frames=self.min_frames,
+            max_frames=self.max_frames,
+        )
+        log.info(
+            f"Processing {len(frame_data)} plays ranging from"
+            "  {self.min_frames} to {self.max_frames} lengths..."
+        )
+        log.info(f"Data includes frame lengths starting from {fmin} to {fmax}")
 
         # Get player relevant attributes
         self.player_attributes = self.players_df.set_index("nflId")
@@ -105,9 +127,16 @@ class TrajectoryDataset(Dataset):
             tracking_df[["s"]].std(),
         )
         self.mean_acc, self.std_acc = (
-            tracking_df[["s"]].mean(),
-            tracking_df[["s"]].std(),
+            tracking_df[["a"]].mean(),
+            tracking_df[["a"]].std(),
         )
+        self.mean_distance_traveled, self.std_distance_traveled = (
+            tracking_df[["dis"]].mean(),
+            tracking_df[["dis"]].std(),
+        )
+        self.max_angle = max_player_angle
+        self.num_downs = num_downs
+        self.num_first_down_yards = num_first_down_yards
 
         # Attributes for input sequence lengths
         self.obs_len = obs_len
@@ -120,6 +149,9 @@ class TrajectoryDataset(Dataset):
         self.data = frame_data  # self.__format_data(frame_data)
 
         # Dataset attributes
+        self.num_features = 21
+        self.num_spatial_features = 7
+        self.num_nodes = 22
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.on_epoch_end()
@@ -138,8 +170,8 @@ class TrajectoryDataset(Dataset):
         if self.shuffle:
             np.random.shuffle(self.indexes)
 
-    @staticmethod
     def read_tracking_data(
+        self,
         root_dir: str,
         datatype: str,
         min_frames: int,
@@ -166,22 +198,32 @@ class TrajectoryDataset(Dataset):
         tracking_df = pd.concat(tracking_files, ignore_index=True)
 
         # Exclude football data for now
-        tracking_df.drop(
-            tracking_df[tracking_df["displayName"] == "football"].index, inplace=True
-        )
+        tracking_df = tracking_df[tracking_df["displayName"] != "football"]
 
         # Collect data by gameId and playId
         frame_data = {}
         frame_max, frame_min = -1, 100000
         index = 0
-        for _, grouped_game in tracking_df.groupby(["gameId", "playId"]):
+
+        log.info("Grouping temporal sequences")
+        for _, grouped_game in tqdm(tracking_df.groupby(["gameId", "playId"])):
             current_frames = []
             # Filter by tackle sequences
             if "tackle" not in grouped_game["event"].values:
                 continue
             # Filter by sequence length
             num_sequences = len(grouped_game["frameId"].unique())
-            if not (min_frames <= num_sequences <= max_frames):
+            if not min_frames <= num_sequences <= max_frames:
+                continue
+
+            # Filter any nan values
+            merged_plays_df = pd.merge(
+                self.plays_df,
+                grouped_game,
+                left_on=["gameId", "playId"],
+                right_on=["gameId", "playId"],
+            )
+            if merged_plays_df[self._plays_features].isnull().values.any():
                 continue
 
             frame_max = max(frame_max, num_sequences)
@@ -198,6 +240,11 @@ class TrajectoryDataset(Dataset):
             for _, frames in frame_data.copy().items():
                 frame_data[index] = frames[::-1]
                 index += 1
+            log.info(
+                f"Finished grouping {len(frame_data)} sequences including augmented instances"
+            )
+        else:
+            log.info(f"Finished grouping {len(frame_data)} sequences")
 
         return tracking_df, frame_data, frame_max, frame_min
 
@@ -212,7 +259,7 @@ class TrajectoryDataset(Dataset):
             Dictionary containing formatted data and labels
         """
         # (batch_size, frames, num_nodes, num_features)
-        data, seq_list = None, None
+        data, seq_list = np.array([]), np.array([])
         toa, tofc = None, None
         graph = []
         lst_of_frames = self.data[index]
@@ -259,11 +306,19 @@ class TrajectoryDataset(Dataset):
             # Temporal data takes into account position, velocity, acceleration
             # distance traveled, orientation, angle of player motion,
             # whether player on home team, has possession, is ball carrier
-            x_vals, y_vals = frame[["x"]].values / 120, frame[["y"]].values / 53.3
+            x_vals, y_vals = (
+                frame[["x"]].values / self.field_length,
+                frame[["y"]].values / self.field_width,
+            )
             s_vals = (frame[["s"]] - self.mean_speed) / self.std_speed
             a_vals = (frame[["a"]] - self.mean_acc) / self.std_acc
-            dis_vals = frame[["dis"]].values
-            o_vals, dir_vals = frame[["o"]].values / 360, frame[["dir"]].values / 360
+            dis_vals = (
+                frame[["dis"]] - self.mean_distance_traveled
+            ) / self.std_distance_traveled
+            o_vals, dir_vals = (
+                frame[["o"]].values / self.max_angle,
+                frame[["dir"]].values / self.max_angle,
+            )
             weight_vals = (
                 (
                     self.player_attributes.loc[frame["nflId"]]["weight"].values
@@ -281,6 +336,20 @@ class TrajectoryDataset(Dataset):
                 .values[..., np.newaxis]
             )
 
+            # Game related features
+            yards_to_go = (
+                merged_plays["yardsToGo"].values / self.num_first_down_yards
+            )[..., np.newaxis]
+            current_down = (merged_plays["quarter"].values / self.num_downs)[
+                ..., np.newaxis
+            ]
+            pass_probability = (merged_plays["passProbability"].values)[..., np.newaxis]
+            num_active_defenders = (merged_plays["defendersInTheBox"].values)[
+                ..., np.newaxis
+            ]
+            yards_to_touchdown = (
+                merged_plays["absoluteYardlineNumber"].values / self.field_length
+            )[..., np.newaxis]
             is_home = np.where(
                 merged_games["homeTeamAbbr"].values == merged_games["club"].values, 1, 0
             )[..., np.newaxis]
@@ -312,11 +381,16 @@ class TrajectoryDataset(Dataset):
                     dis_vals,
                     o_vals,
                     dir_vals,
+                    collect_time,  # spatial features
                     weight_vals,
-                    collect_time,  # numerical
                     is_in_possesion,
                     is_ball_carrier,
                     is_home,
+                    num_active_defenders,
+                    yards_to_go,
+                    current_down,
+                    pass_probability,
+                    yards_to_touchdown,
                     is_first_contact_play,
                     is_tackle_play,
                     is_fumble_play,
@@ -327,16 +401,17 @@ class TrajectoryDataset(Dataset):
             # Generate sequences of frames (len_input_seq)
             seq_list = (
                 np.concatenate((seq_list, current), axis=0)
-                if seq_list is not None
+                if seq_list.size
                 else current
             )
-            # Generate graph from relevant attributes (each player connected to all of the other team)
+            # Generate graph from relevant attributes
+            # (each player connected to all of the other team)
             graph.append(TrajectoryDataset.get_graph(current))
 
         # Batch sequences of frames (batch_size)
         data = (
             np.concatenate((data, seq_list), axis=0)
-            if data is not None
+            if data.size
             else seq_list[np.newaxis, ...]
         )
         toa_label: bool = toa is not None
@@ -344,13 +419,13 @@ class TrajectoryDataset(Dataset):
             (toa - start_time).total_seconds()
             if toa is not None
             else -total_time_of_play
-        )
+        )[0]
         tofc_label: bool = tofc is not None
         tofc_time_label = (
             (tofc - start_time).total_seconds()
             if tofc is not None
             else -total_time_of_play
-        )
+        )[0]
         # convert from (batch_size, frames, num_nodes, num_features)
         # to the expected format (batch_size, num_features, frames, num_nodes)
         obs_traj, obs_truth = (
@@ -371,25 +446,26 @@ class TrajectoryDataset(Dataset):
                 "graph": torch.from_numpy(np.array(graph_truth).squeeze()).type(
                     torch.float
                 ),
-                "event_type": torch.from_numpy(np.array([toa_label, tofc_label])).type(
-                    torch.float
-                ),
+                "event_type": torch.from_numpy(
+                    np.array([[toa_label, tofc_label]])
+                ).type(torch.float),
                 "node_index": torch.from_numpy(is_involved.T).type(torch.float),
                 "time_of_event": torch.from_numpy(
-                    np.array([toa_time_label, tofc_time_label])
+                    np.array([[toa_time_label, tofc_time_label]])
                 ).type(torch.float),
             },
         }
 
     @staticmethod
     def get_graph(single_frame: np.ndarray):
-        """_summary_
+        """
+        Generate the adjacency matrix per single frame instance
 
         Arguments:
             single_frame -- Single frame formatted as (1, num_nodes, num_features)
 
         Returns:
-            _description_
+            Adjacency matrix for given frame
         """
         adj = []
         for elements in single_frame.squeeze():

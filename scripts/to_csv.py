@@ -6,7 +6,7 @@ import pandas as pd
 from fire import Fire
 from tqdm import tqdm
 
-from src.datasets import TrajectoryDataset as dataset
+from src.datasets import TrajectoryDataset
 
 # setup logger
 logging.config.fileConfig("logging.conf")
@@ -21,15 +21,16 @@ def generate_csv(
     min_frames: int = 60,
     max_frames: int = 70,
     seed: int = 239,
+    **kwargs,
 ):
     assert 0 < split < 1, f"Split must be a float. Got {split}"
-    frame_data, fmax, fmin = dataset.read_tracking_data(
+    dataset = TrajectoryDataset(datatype=csv_name, **kwargs)
+    _, frame_data, *_ = dataset.read_tracking_data(
         root_dir=root_dir,
         datatype=csv_name,
         min_frames=min_frames,
         max_frames=max_frames,
     )
-    log.info(f"Working with frame size range {fmin} -> {fmin}")
     random.seed(seed)
     random.shuffle(frame_data)
     train_size = int(len(frame_data) * split)

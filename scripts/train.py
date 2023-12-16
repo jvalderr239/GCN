@@ -1,6 +1,5 @@
 import logging
 import logging.config
-import os
 from datetime import datetime
 
 import torch
@@ -8,7 +7,6 @@ from fire import Fire
 from torch.utils.tensorboard import SummaryWriter
 
 from src import train_utils
-from src.metrics import checkpoint
 from src.models.social_collision_stgcnn import SOCIAL_COLLISION_STGCNN as mimo
 from src.utils import get_project_root
 
@@ -24,11 +22,46 @@ log.info(f"Working with {device} for training")
 def train(epochs: int, batch_size: int = 1, **kwargs):
     # Defining the model
     trainer = train_utils.Trainer(**kwargs)
-    model = mimo(
+    log.info("Loading training set")
+    loader_train = train_utils.generate_dataloader(
+        "train",
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,
+        root_dir=trainer.root_dir,
+        obs_len=trainer.seq_len,
+        pred_len=trainer.pred_seq_len,
+    )
+    log.info("Loading validation set")
+    loader_val = train_utils.generate_dataloader(
+        "validation",
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=1,
+        root_dir=trainer.root_dir,
+        obs_len=trainer.seq_len,
+        pred_len=trainer.pred_seq_len,
+    )
+    log.info("Loading test set")
+    loader_val = train_utils.generate_dataloader(
+        "test",
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=1,
+        root_dir=trainer.root_dir,
+        obs_len=trainer.seq_len,
+        pred_len=trainer.pred_seq_len,
+    )
+
+    stgcnn_model = mimo(
         num_events=trainer.num_events,
+        num_spatial_nodes=trainer.num_spatial_features,
         n_stgcnn=trainer.num_spatial,
         n_txpcnn=trainer.num_temporal,
-        input_feat=trainer.num_features,
+        input_feat=trainer.num_spatial_features,
+        input_cnn_feat=trainer.num_features
+        - trainer.num_spatial_features
+        + trainer.output_feat,
         output_feat=trainer.output_feat,
         seq_len=trainer.seq_len,
         pred_seq_len=trainer.pred_seq_len,
@@ -40,27 +73,7 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
     ).to(device=device)
 
     # Training settings
-
-    loader_train = train_utils.generate_dataloader(
-        "train",
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=0,
-        root_dir=trainer.root_dir,
-        obs_len=trainer.seq_len,
-        pred_len=trainer.pred_seq_len,
-    )
-    loader_val = train_utils.generate_dataloader(
-        "validation",
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=1,
-        root_dir=trainer.root_dir,
-        obs_len=trainer.seq_len,
-        pred_len=trainer.pred_seq_len,
-    )
-
-    optimizer = torch.optim.SGD(model.parameters(), lr=trainer.lr)
+    optimizer = torch.optim.SGD(stgcnn_model.parameters(), lr=trainer.lr)
     scheduler = trainer.get_scheduler(optimizer=optimizer)
 
     # Initializing in a separate cell so we can easily add more epochs to the same run
@@ -76,20 +89,21 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
         log.info(f"EPOCH {epoch_number + 1}:")
 
         # Make sure gradient tracking is on, and do a pass over the data
-        model.train(True)
+        stgcnn_model.train(True)
         avg_loss = train_utils.train_one_epoch(
             epoch_index=epoch_number,
-            model=model,
+            model=stgcnn_model,
             training_loader=loader_train,
             optimizer=optimizer,
             tb_writer=writer,
             clip=trainer.clip,
+            device=device,
         )
 
         running_vloss = 0.0
         # Set the model to evaluation mode, disabling dropout and using population
         # statistics for batch normalization.
-        model.eval()
+        stgcnn_model.eval()
 
         # Disable gradient computation and reduce memory consumption.
         with torch.no_grad():
@@ -102,13 +116,17 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
                 V_obs_tmp = V_obs.permute(0, 3, 1, 2)
 
                 # Make predictions for this batch
-                V_pred, _, simo = model(V_obs_tmp, A_obs.squeeze())
+                V_pred, _, simo = stgcnn_model(  # pylint: disable=not-callable
+                    V_obs_tmp, A_obs.squeeze()
+                )
 
                 V_pred = V_pred.permute(0, 2, 3, 1)
-                vloss = train_utils.criterion((V_pred, simo), truth_labels.copy())
+                vloss = train_utils.criterion(
+                    (V_pred, simo), truth_labels.copy(), device
+                )
                 running_vloss += vloss
 
-        avg_vloss = running_vloss / (iv + 1)
+        avg_vloss = running_vloss / (iv + 1)  # pylint: disable=undefined-loop-variable
         log.info(f"LOSS train {avg_loss} valid {avg_vloss}".format(avg_loss, avg_vloss))
 
         before_lr = optimizer.param_groups[0]["lr"]
@@ -128,8 +146,11 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
             best_epoch = epoch_number
-            model_path = f"{str(get_project_root())}/train_results/social_collision_stgcnn_{timestamp}_{epoch_number}.pt"
-            checkpoint(model, model)
+            model_path = (
+                f"{str(get_project_root())}/train_results/"
+                "social_collision_stgcnn_{timestamp}_{epoch_number}.pt"
+            )
+            train_utils.checkpoint(stgcnn_model, model_path)
         elif epoch_number - best_epoch > early_stop_thresh:
             log.warning(f"Early stopped training at epoch {epoch_number}")
             break  # terminate the training loop
