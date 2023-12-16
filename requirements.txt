@@ -4,53 +4,117 @@
 #
 #    pip-compile --output-file=requirements.txt
 #
+absl-py==2.0.0
+    # via tensorboard
 albumentations==1.3.0
     # via NFLBIGDATA-GCN (setup.py)
+appdirs==1.4.4
+    # via nfl-data-py
+cachetools==5.3.2
+    # via google-auth
 certifi==2023.11.17
     # via requests
 charset-normalizer==3.3.2
     # via requests
+cramjam==2.7.0
+    # via fastparquet
+fastparquet==2023.10.1
+    # via nfl-data-py
+fire==0.5.0
+    # via NFLBIGDATA-GCN (setup.py)
+fsspec==2023.12.2
+    # via fastparquet
+google-auth==2.25.2
+    # via
+    #   google-auth-oauthlib
+    #   tensorboard
+google-auth-oauthlib==1.0.0
+    # via tensorboard
+grpcio==1.60.0
+    # via tensorboard
 idna==3.6
     # via requests
 imageio==2.33.0
     # via scikit-image
+importlib-metadata==7.0.0
+    # via markdown
 joblib==1.3.2
     # via scikit-learn
 lazy-loader==0.3
     # via scikit-image
+markdown==3.5.1
+    # via tensorboard
+markupsafe==2.1.3
+    # via werkzeug
 networkx==3.2.1
-    # via scikit-image
-numpy==1.26.2
+    # via
+    #   NFLBIGDATA-GCN (setup.py)
+    #   scikit-image
+nfl-data-py==0.3.1
+    # via NFLBIGDATA-GCN (setup.py)
+numpy==1.25.2
     # via
     #   NFLBIGDATA-GCN (setup.py)
     #   albumentations
+    #   fastparquet
     #   imageio
     #   opencv-python-headless
+    #   pandas
     #   qudida
     #   scikit-image
     #   scikit-learn
     #   scipy
+    #   tensorboard
     #   tifffile
     #   torchvision
+oauthlib==3.2.2
+    # via requests-oauthlib
 opencv-python-headless==4.8.1.78
     # via
     #   albumentations
     #   qudida
 packaging==23.2
-    # via scikit-image
+    # via
+    #   fastparquet
+    #   scikit-image
+pandas==2.1.4
+    # via
+    #   fastparquet
+    #   nfl-data-py
 pillow==10.1.0
     # via
     #   imageio
     #   scikit-image
     #   torchvision
 protobuf==4.25.1
-    # via NFLBIGDATA-GCN (setup.py)
+    # via
+    #   NFLBIGDATA-GCN (setup.py)
+    #   tensorboard
+pyasn1==0.5.1
+    # via
+    #   pyasn1-modules
+    #   rsa
+pyasn1-modules==0.3.0
+    # via google-auth
+python-dateutil==2.8.2
+    # via pandas
+python-snappy==0.6.1
+    # via nfl-data-py
+pytz==2023.3.post1
+    # via pandas
 pyyaml==6.0.1
     # via albumentations
 qudida==0.0.4
     # via albumentations
 requests==2.31.0
-    # via torchvision
+    # via
+    #   requests-oauthlib
+    #   tensorboard
+    #   torchvision
+requests-oauthlib==1.3.1
+    # via google-auth-oauthlib
+rsa==4.9
+    # via google-auth
 scikit-image==0.22.0
     # via albumentations
 scikit-learn==1.3.2
@@ -60,6 +124,17 @@ scipy==1.11.4
     #   albumentations
     #   scikit-image
     #   scikit-learn
+six==1.16.0
+    # via
+    #   fire
+    #   python-dateutil
+    #   tensorboard
+tensorboard==2.14.1
+    # via NFLBIGDATA-GCN (setup.py)
+tensorboard-data-server==0.7.2
+    # via tensorboard
+termcolor==2.4.0
+    # via fire
 threadpoolctl==3.2.0
     # via scikit-learn
 tifffile==2023.9.26
@@ -77,5 +152,14 @@ typing-extensions==4.8.0
     #   qudida
     #   torch
     #   torchvision
+tzdata==2023.3
+    # via pandas
 urllib3==2.1.0
     # via requests
+werkzeug==3.0.1
+    # via tensorboard
+zipp==3.17.0
+    # via importlib-metadata
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools

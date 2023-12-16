@@ -26,13 +26,17 @@ setup(
         "torch==1.13.1",
         "torchvision==0.14.1",
         "tqdm==4.64.1",
-        "numpy",
-        "protobuf"
+        "numpy>=1.24, <1.26",
+        "pandas<2.1,>2", 
+        "protobuf",
+        "networkx",
+        "tensorboard",
+        "fire",
+        "nfl_data_py"
     ],
     extras_require={
         "dev": [
             "matplotlib", 
-            "pandas", 
             "jupyter",
             "ipykernel",
             "torchsummary",
