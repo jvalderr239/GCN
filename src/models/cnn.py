@@ -9,6 +9,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         self,
         in_channels: int,
         num_events: int = 3,
+        num_nodes: int = 22,
         dropout: float = 0.3,
         kernel_size: int = 3,
         hidden_fc_dim: int = 128,
@@ -33,7 +34,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         )
         self.node_index_fc = nn.Sequential(
             nn.Dropout(p=dropout),
-            nn.Linear(in_features=(hidden_fc_dim // 2), out_features=1),
+            nn.Linear(in_features=(hidden_fc_dim // 2), out_features=num_nodes),
         )
         self.time_of_event_fc = nn.Sequential(
             nn.Dropout(p=dropout),
@@ -83,6 +84,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         name: str,
         pretrained: bool,
         num_events: int = 1,
+        num_nodes: int = 22,
         kernel_size: int = 3,
         dropout: float = 0.3,
     ):
@@ -100,7 +102,8 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
             nn.Sigmoid(),
         )
         self.node_index_fc = nn.Sequential(
-            nn.Dropout(p=dropout), nn.Linear(in_features=cnn_output_dim, out_features=1)
+            nn.Dropout(p=dropout),
+            nn.Linear(in_features=cnn_output_dim, out_features=num_nodes),
         )
         self.time_of_event_fc = nn.Sequential(
             nn.Dropout(p=dropout),

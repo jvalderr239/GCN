@@ -1,108 +1,122 @@
+import logging
+import logging.config
 import os
+from datetime import datetime
 
-import torch.optim as optim
+import torch
 from fire import Fire
+from torch.utils.tensorboard import SummaryWriter
 
+from src import train_utils
 from src.models.social_collision_stgcnn import \
     SOCIAL_COLLISION_STGCNN as social_c_stgcnn
-from src.train_utils import Trainer
+from src.utils import get_project_root
 
-# Defining the model
-trainer = Trainer()
-model = social_c_stgcnn(
-    num_events=trainer.num_events,
-    n_stgcnn=trainer.num_spatial,
-    n_txpcnn=trainer.num_temporal,
-    input_feat=trainer.num_features,
-    output_feat=trainer.output_feat,
-    seq_len=trainer.seq_len,
-    pred_seq_len=trainer.pred_seq_len,
-    kernel_size=trainer.kernel_size,
-    cnn=trainer.cnn_name,
-    pretrained=trainer.pretrained,
-    cnn_dropout=trainer.cnn_dropout,
-).cuda()
+# setup logger
+log_file_path = get_project_root() / "logging.conf"
+logging.config.fileConfig(str(log_file_path))
+log = logging.getLogger(__name__)
 
-# Training settings
-
-optimizer = optim.SGD(model.parameters(), lr=trainer.lr)
-scheduler = trainer.get_scheduler(optimizer=optimizer)
-
-loader_train, loader_val = trainer.get_dataloaders()
-
-if not os.path.exists(trainer.checkpoint_dir):
-    os.makedirs(trainer.checkpoint_dir)
-
-# Training
-metrics = {"train_loss": [], "val_loss": []}
-constant_metrics = {"min_val_epoch": -1, "min_val_loss": 9999999999999999}
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-def train(epoch):
-    model.train()
-    loss_batch = 0
-    batch_count = 0
-    is_fst_loss = True
-    loader_len = len(trainer.loader_train)
-    turn_point = (
-        int(loader_len / trainer.batch_size) * trainer.batch_size
-        + loader_len % trainer.batch_size
-        - 1
+def train(epochs: int, **kwargs):
+    # Defining the model
+    trainer = train_utils.Trainer(**kwargs)
+    model = social_c_stgcnn(
+        num_events=trainer.num_events,
+        n_stgcnn=trainer.num_spatial,
+        n_txpcnn=trainer.num_temporal,
+        input_feat=trainer.num_features,
+        output_feat=trainer.output_feat,
+        seq_len=trainer.seq_len,
+        pred_seq_len=trainer.pred_seq_len,
+        kernel_size=trainer.kernel_size,
+        num_nodes=trainer.num_nodes,
+        cnn=trainer.cnn_name,
+        pretrained=trainer.pretrained,
+        cnn_dropout=trainer.cnn_dropout,
+    ).cuda()
+
+    # Training settings
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=trainer.lr)
+    scheduler = trainer.get_scheduler(optimizer=optimizer)
+
+    loader_train = train_utils.generate_dataloader(
+        "train", batch_size=8, shuffle=True, num_workers=0, root_dir=trainer.root_dir
+    )
+    loader_val = train_utils.generate_dataloader(
+        "validation",
+        batch_size=8,
+        shuffle=False,
+        num_workers=1,
+        root_dir=trainer.root_dir,
     )
 
-    for cnt, batch in enumerate(trainer.loader_train):
-        batch_count += 1
-        # Get data
-        batch = [tensor.cuda() for tensor in batch]
-        (
-            obs_traj,
-            pred_traj_gt,
-            obs_traj_rel,
-            pred_traj_gt_rel,
-            non_linear_ped,
-            loss_mask,
-            V_obs,
-            A_obs,
-            V_tr,
-            A_tr,
-        ) = batch
+    if not os.path.exists(trainer.checkpoint_dir):
+        os.makedirs(trainer.checkpoint_dir)
 
-        optimizer.zero_grad()
-        # Forward
-        # V_obs = batch,seq,node,feat
-        # V_obs_tmp = batch,feat,seq,node
-        V_obs_tmp = V_obs.permute(0, 3, 1, 2)
+    checkpoint = torch.load(trainer.checkpoint_dir)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    epoch = checkpoint["epoch"]
+    loss = checkpoint["loss"]
 
-        V_pred, _ = model(V_obs_tmp, A_obs.squeeze())
+    # Initializing in a separate cell so we can easily add more epochs to the same run
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    writer = SummaryWriter(
+        "{}/runs/fashion_trainer_{}".format(str(get_project_root()), timestamp)
+    )
+    epoch_number = 0
 
-        V_pred = V_pred.permute(0, 2, 3, 1)
+    best_vloss = 1_000_000.0
 
-        V_tr = V_tr.squeeze()
-        A_tr = A_tr.squeeze()
-        V_pred = V_pred.squeeze()
+    for epoch in range(epochs):
+        log.info(f"EPOCH {epoch_number + 1}:")
 
-        if batch_count % args.batch_size != 0 and cnt != turn_point:
-            l = graph_loss(V_pred, V_tr)
-            if is_fst_loss:
-                loss = l
-                is_fst_loss = False
-            else:
-                loss += l
+        # Make sure gradient tracking is on, and do a pass over the data
+        model.train(True)
+        avg_loss = train_utils.train_one_epoch(
+            epoch_index=epoch_number,
+            model=model,
+            training_loader=loader_train,
+            optimizer=optimizer,
+            tb_writer=writer,
+        )
 
-        else:
-            loss = loss / args.batch_size
-            is_fst_loss = True
-            loss.backward()
+        running_vloss = 0.0
+        # Set the model to evaluation mode, disabling dropout and using population
+        # statistics for batch normalization.
+        model.eval()
 
-            if args.clip_grad is not None:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+        # Disable gradient computation and reduce memory consumption.
+        with torch.no_grad():
+            for i, vdata in enumerate(loader_val):
+                vinputs, vlabels = vdata
+                voutputs = model(vinputs)
+                vloss = loss_fn(voutputs, vlabels)
+                running_vloss += vloss
 
-            optimizer.step()
-            # Metrics
-            loss_batch += loss.item()
-            print("TRAIN:", "\t Epoch:", epoch, "\t Loss:", loss_batch / batch_count)
+        avg_vloss = running_vloss / (i + 1)
+        log.info(f"LOSS train {avg_loss} valid {avg_vloss}".format(avg_loss, avg_vloss))
 
-    metrics["train_loss"].append(loss_batch / batch_count)
+        # Log the running loss averaged per batch
+        # for both training and validation
+        writer.add_scalars(
+            "Training vs. Validation Loss",
+            {"Training": avg_loss, "Validation": avg_vloss},
+            epoch_number + 1,
+        )
+        writer.flush()
+
+        # Track best performance, and save the model's state
+        if avg_vloss < best_vloss:
+            best_vloss = avg_vloss
+            model_path = "model_{}_{}".format(timestamp, epoch_number)
+            torch.save(model.state_dict(), model_path)
+
+        epoch_number += 1
 
 
 if __name__ == "main":

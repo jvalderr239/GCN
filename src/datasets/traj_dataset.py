@@ -1,21 +1,23 @@
-# pylint: disable=arg-type
 import logging
 import logging.config
 import math
-import os
 from enum import IntEnum
 from glob import glob
+from typing import Dict, List
 
 import networkx as nx
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+from tqdm import tqdm
+
+from src.utils import get_project_root
 
 # setup logger
-# log_file_path = "../../logging.conf"
-# logging.config.fileConfig(log_file_path)
-# log = logging.getLogger(__name__)
+log_file_path = get_project_root() / "logging.conf"
+logging.config.fileConfig(str(log_file_path))
+log = logging.getLogger(__name__)
 
 
 class DATA_COLUMNS(IntEnum):
@@ -76,16 +78,16 @@ class TrajectoryDataset(Dataset):
 
         # Extract appropriate data by frame range
         self.min_frames, self.max_frames = min_frames, max_frames
-        tracking_df, self.data, fmax, fmin = TrajectoryDataset.read_tracking_data(
+        tracking_df, frame_data, fmax, fmin = TrajectoryDataset.read_tracking_data(
             root_dir=root_dir,
             datatype=datatype,
             min_frames=self.min_frames,
             max_frames=self.max_frames,
         )
-        print(
-            f"Processing {len(self.data)} plays ranging from  {self.min_frames} to {self.max_frames} lengths..."
+        log.info(
+            f"Processing {len(frame_data)} plays ranging from  {self.min_frames} to {self.max_frames} lengths..."
         )
-        print(f"Data includes frame lengths starting from {fmin} to {fmax}")
+        log.info(f"Data includes frame lengths starting from {fmin} to {fmax}")
 
         # Keep track of relevant data from csv
         data_dir = root_dir + "nfl-big-data-bowl-2024/"
@@ -112,6 +114,10 @@ class TrajectoryDataset(Dataset):
         self.pred_len = pred_len
         self.seq_len = self.obs_len + self.pred_len
         self.norm_lap_matr = norm_lap_matr
+
+        # Format data and labels
+
+        self.data = frame_data  # self.__format_data(frame_data)
 
         # Dataset attributes
         self.batch_size = batch_size
@@ -188,9 +194,10 @@ class TrajectoryDataset(Dataset):
             index += 1
 
         # Add augmentations as reversed forms of original sequence
-        for _, frames in frame_data.copy().items():
-            frame_data[index] = frames[::-1]
-            index += 1
+        if datatype == "train":
+            for _, frames in frame_data.copy().items():
+                frame_data[index] = frames[::-1]
+                index += 1
 
         return tracking_df, frame_data, frame_max, frame_min
 
@@ -199,29 +206,31 @@ class TrajectoryDataset(Dataset):
         Retrieve element from tracking dataset as a multi-output dict
 
         Arguments:
-            index -- Index to fetch from in
+            index -- Index to fetch from (gameId, playId) sequences
 
         Returns:
-            Dictionary containing data and labels
+            Dictionary containing formatted data and labels
         """
         # (batch_size, frames, num_nodes, num_features)
-        data = None
+        data, seq_list = None, None
+        toa, tofc = None, None
         graph = []
-        default_tackle_time = -1
-        seq_list = None
-        toa = default_tackle_time
-
+        lst_of_frames = self.data[index]
         # Time related attributes for entire play
-        for frames in self.data[index]:
+        for frames in lst_of_frames:
             event, *_ = frames["event"].unique()
             if str(event) == "tackle":
                 toa = pd.to_datetime(
                     frames["time"], format="%Y-%m-%d %H:%M:%S.%f"
                 ).unique()
+            if str(event) == "first_contact":
+                tofc = pd.to_datetime(
+                    frames["time"], format="%Y-%m-%d %H:%M:%S.%f"
+                ).unique()
 
-        first_frame, last_frame = self.data[index][0], self.data[index][-1]
+        first_frame, last_frame = lst_of_frames[0], lst_of_frames[-1]
         start_time = pd.to_datetime(
-            first_frame[0]["time"], format="%Y-%m-%d %H:%M:%S.%f"
+            first_frame["time"], format="%Y-%m-%d %H:%M:%S.%f"
         ).unique()
         total_time_of_play = (
             pd.to_datetime(last_frame["time"], format="%Y-%m-%d %H:%M:%S.%f").unique()
@@ -229,7 +238,7 @@ class TrajectoryDataset(Dataset):
         ).total_seconds()
 
         # Parse entire play and collect relevant attributes for each player
-        for frames in self.data[index]:
+        for frames in lst_of_frames:
             frame = frames.sort_values(by=["nflId"])
             merged_games = pd.merge(
                 self.games_df, frame, left_on="gameId", right_on="gameId"
@@ -294,11 +303,6 @@ class TrajectoryDataset(Dataset):
                 frame[["nflId"]].values, merged_tackles["nflId_tackler"].unique()
             )
 
-            time_to_attack = (
-                pd.to_datetime(frame["time"], format="%Y-%m-%d %H:%M:%S.%f")
-                .apply(lambda x: float((toa - x).total_seconds()[0]))
-                .values[..., np.newaxis]
-            )
             current = np.concatenate(
                 [
                     x_vals,
@@ -312,13 +316,12 @@ class TrajectoryDataset(Dataset):
                     collect_time,  # numerical
                     is_in_possesion,
                     is_ball_carrier,
-                    is_home,  # categorical
+                    is_home,
                     is_first_contact_play,
                     is_tackle_play,
                     is_fumble_play,
-                    is_involved,
-                    time_to_attack,
-                ],  # label-related
+                    is_involved,  # categorical
+                ],
                 axis=1,
             )[np.newaxis, ...]
             # Generate sequences of frames (len_input_seq)
@@ -327,7 +330,6 @@ class TrajectoryDataset(Dataset):
                 if seq_list is not None
                 else current
             )
-
             # Generate graph from relevant attributes (each player connected to all of the other team)
             graph.append(TrajectoryDataset.get_graph(current))
 
@@ -337,11 +339,18 @@ class TrajectoryDataset(Dataset):
             if data is not None
             else seq_list[np.newaxis, ...]
         )
-        toa_label: bool = toa == default_tackle_time
+        toa_label: bool = toa is not None
         toa_time_label = (
-            (toa - start_time).total_seconds() if toa != default_tackle_time else [-1]
+            (toa - start_time).total_seconds()
+            if toa is not None
+            else -total_time_of_play
         )
-
+        tofc_label: bool = tofc is not None
+        tofc_time_label = (
+            (tofc - start_time).total_seconds()
+            if tofc is not None
+            else -total_time_of_play
+        )
         # convert from (batch_size, frames, num_nodes, num_features)
         # to the expected format (batch_size, num_features, frames, num_nodes)
         obs_traj, obs_truth = (
@@ -352,27 +361,40 @@ class TrajectoryDataset(Dataset):
             graph[: self.obs_len + 1],
             graph[self.obs_len + 1 : self.pred_len],
         )
-
         return {
             "data": [
-                torch.from_numpy(obs_traj).type(torch.float),
-                torch.from_numpy(graph_traj).type(torch.float),
+                torch.from_numpy(obs_traj.squeeze()).type(torch.float),
+                torch.from_numpy(np.array(graph_traj).squeeze()).type(torch.float),
             ],
             "labels": {
-                "trajectory": torch.from_numpy(obs_truth).type(torch.float),
-                "graph": torch.from_numpy(graph_truth).type(torch.float),
-                "event_type": torch.Tensor([toa_label]).type(torch.float),
+                "trajectory": torch.from_numpy(obs_truth.squeeze()).type(torch.float),
+                "graph": torch.from_numpy(np.array(graph_truth).squeeze()).type(
+                    torch.float
+                ),
+                "event_type": torch.from_numpy(np.array([toa_label, tofc_label])).type(
+                    torch.float
+                ),
                 "node_index": torch.from_numpy(is_involved.T).type(torch.float),
-                "time_of_attack": torch.Tensor([toa_time_label]).type(torch.float),
+                "time_of_event": torch.from_numpy(
+                    np.array([toa_time_label, tofc_time_label])
+                ).type(torch.float),
             },
         }
 
     @staticmethod
-    def get_graph(single_frame):
+    def get_graph(single_frame: np.ndarray):
+        """_summary_
+
+        Arguments:
+            single_frame -- Single frame formatted as (1, num_nodes, num_features)
+
+        Returns:
+            _description_
+        """
         adj = []
-        for elements in single_frame:
+        for elements in single_frame.squeeze():
             current_element = []
-            for other_elements in single_frame:
+            for other_elements in single_frame.squeeze():
                 is_not_same_team = (
                     elements[DATA_COLUMNS.IS_HOME]
                     != other_elements[DATA_COLUMNS.IS_HOME]

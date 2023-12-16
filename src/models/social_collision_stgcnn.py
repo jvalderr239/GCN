@@ -1,9 +1,18 @@
+import logging
+import logging.config
 from typing import Optional
 
 from torch import nn
 
+from src.utils import get_project_root
+
 from .cnn import EVENT_PREDICTOR_CNN, PRETRAINED_EVENT_PREDICTOR_CNN
 from .st_gcn import ST_GCN
+
+# setup logger
+log_file_path = get_project_root() / "logging.conf"
+logging.config.fileConfig(str(log_file_path))
+log = logging.getLogger(__name__)
 
 
 class SOCIAL_COLLISION_STGCNN(nn.Module):
@@ -25,6 +34,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
     def __init__(
         self,
         num_events: int,
+        num_nodes: int,
         n_stgcnn: int = 1,
         n_txpcnn: int = 1,
         input_feat: int = 2,
@@ -43,13 +53,14 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         self.n_stgcnn = n_stgcnn
         self.n_txpcnn = n_txpcnn
 
+        log.info(f"Constructing {self.n_stgcnn} spatial layers")
         self.st_gcns = nn.ModuleList()
         self.st_gcns.append(ST_GCN(input_feat, output_feat, (kernel_size, seq_len)))
         for _ in range(1, self.n_stgcnn):
             self.st_gcns.append(
                 ST_GCN(output_feat, output_feat, (kernel_size, seq_len), **kwargs)
             )
-
+        log.info(f"Constructing {self.n_txpcnn} temporal layers")
         self.tpcnns = nn.ModuleList()
         self.tpcnns.append(nn.Conv2d(seq_len, pred_seq_len, 3, padding=1))
         for _ in range(1, self.n_txpcnn):
@@ -66,15 +77,18 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
                 name=cnn,
                 pretrained=pretrained,
                 num_events=num_events,
+                num_nodes=num_nodes,
                 dropout=cnn_dropout,
             )
             if cnn is not None
             else EVENT_PREDICTOR_CNN(
                 in_channels=output_feat,
                 num_events=num_events,
+                num_nodes=num_nodes,
                 dropout=cnn_dropout,
             )
         )
+        log.info(f"Using {cnn.name} model for prediction")
 
     def forward(self, v, a):
         """

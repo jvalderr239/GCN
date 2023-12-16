@@ -1,5 +1,11 @@
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 from matplotlib import patches
+
+
+def get_project_root() -> Path:
+    return Path(__file__).parent.parent
 
 
 def create_football_field(
