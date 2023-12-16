@@ -3,6 +3,7 @@ import logging.config
 from typing import Optional
 
 from torch import nn
+from torchsummary import summary
 
 from src.utils import get_project_root
 
@@ -88,7 +89,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
                 dropout=cnn_dropout,
             )
         )
-        log.info(f"Using {cnn.name} model for prediction")
+        log.info(f"Built cnn model for prediction")
 
     def forward(self, v, a):
         """

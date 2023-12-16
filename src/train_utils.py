@@ -42,7 +42,7 @@ class Trainer:
 
     # Train parameters
     lr: float = 0.001
-    checkpoint_dir = f"{str(ROOT_DIR)}/checkpoint/{datetime.now()}/"
+    checkpoint_dir = f"{str(ROOT_DIR)}/train_results/checkpoint/{datetime.now()}/"
     root_dir: str = str(ROOT_DIR / "resources") + "/"
 
     def update(self, arg, value):
@@ -82,7 +82,7 @@ def criterion(outputs: Tuple[torch.Tensor, torch.Tensor], truth_labels: Dict[str
     loss_map: Dict[str, nn.NLLLoss] = {
         "node_index": nn.BCELoss(),
         "event_type": nn.BCELoss(),
-        "time_of_event": nn.BCELoss(),
+        "time_of_event": nn.MSELoss(),
     }
 
     losses = 0
@@ -111,6 +111,7 @@ def train_one_epoch(
 ):
     running_loss = 0.0
     last_loss = 0.0
+    n_total_steps = len(training_loader)
 
     # Here, we use enumerate(training_loader) instead of
     # iter(training_loader) so that we can track the batch
@@ -142,7 +143,8 @@ def train_one_epoch(
 
         # Gather data and report
         running_loss += loss.item()
-        if i % 1000 == 999:
+
+        if (i + 1) % (int(n_total_steps / 1)) == 0:
             last_loss = running_loss / 1000  # loss per batch
             log.debug(f"batch {i + 1} loss: {last_loss}")
             tb_x = epoch_index * len(training_loader) + i + 1

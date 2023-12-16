@@ -60,19 +60,17 @@ def train(epochs: int, **kwargs):
     checkpoint = torch.load(trainer.checkpoint_dir)
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    epoch = checkpoint["epoch"]
-    loss = checkpoint["loss"]
 
     # Initializing in a separate cell so we can easily add more epochs to the same run
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     writer = SummaryWriter(
-        "{}/runs/fashion_trainer_{}".format(str(get_project_root()), timestamp)
+        f"{str(get_project_root())}/train_results/runs/stgcnn_{timestamp}"
     )
     epoch_number = 0
 
     best_vloss = 1_000_000.0
 
-    for epoch in range(epochs):
+    for epoch_number in range(epochs):
         log.info(f"EPOCH {epoch_number + 1}:")
 
         # Make sure gradient tracking is on, and do a pass over the data
@@ -92,13 +90,22 @@ def train(epochs: int, **kwargs):
 
         # Disable gradient computation and reduce memory consumption.
         with torch.no_grad():
-            for i, vdata in enumerate(loader_val):
-                vinputs, vlabels = vdata
-                voutputs = model(vinputs)
-                vloss = loss_fn(voutputs, vlabels)
+            for iv, vbatchdata in enumerate(loader_val):
+                V_obs, A_obs = vbatchdata["data"]
+                truth_labels = vbatchdata["labels"]
+
+                # V_obs = batch,seq,node,feat
+                # V_obs_tmp = batch,feat,seq,node
+                V_obs_tmp = V_obs.permute(0, 3, 1, 2)
+
+                # Make predictions for this batch
+                V_pred, _, simo = model(V_obs_tmp, A_obs.squeeze())
+
+                V_pred = V_pred.permute(0, 2, 3, 1)
+                vloss = train_utils.criterion((V_pred, simo), truth_labels.copy())
                 running_vloss += vloss
 
-        avg_vloss = running_vloss / (i + 1)
+        avg_vloss = running_vloss / (iv + 1)
         log.info(f"LOSS train {avg_loss} valid {avg_vloss}".format(avg_loss, avg_vloss))
 
         # Log the running loss averaged per batch
@@ -113,7 +120,7 @@ def train(epochs: int, **kwargs):
         # Track best performance, and save the model's state
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
-            model_path = "model_{}_{}".format(timestamp, epoch_number)
+            model_path = f"{str(get_project_root())}/train_results/model_{timestamp}_{epoch_number}"
             torch.save(model.state_dict(), model_path)
 
         epoch_number += 1
