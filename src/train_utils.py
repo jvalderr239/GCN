@@ -7,7 +7,6 @@ import torch
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader, Dataset
-from torch.utils.data.dataloader import default_collate
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -20,8 +19,6 @@ ROOT_DIR = get_project_root()
 log_file_path = ROOT_DIR / "logging.conf"
 logging.config.fileConfig(str(log_file_path))
 log = logging.getLogger(__name__)
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 @dataclasses.dataclass
@@ -70,7 +67,6 @@ def generate_dataloader(
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
-        collate_fn=lambda x: tuple(x_.to(device) for x_ in default_collate(x)),
     )
 
 

@@ -19,12 +19,10 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         self.name = self.__class__
 
         self.conv_layers = [
-            EVENT_PREDICTOR_CNN.build_conv_layer(
+            self.build_conv_layer(
                 in_c=in_channels, out_c=hidden_fc_dim, kernel_size=kernel_size
             ),
-            EVENT_PREDICTOR_CNN.build_conv_layer(
-                hidden_fc_dim, hidden_fc_dim * 4, kernel_size=1
-            ),
+            self.build_conv_layer(hidden_fc_dim, hidden_fc_dim * 4, kernel_size=1),
         ]
 
         self.fc1 = nn.Linear(hidden_fc_dim * 4, hidden_fc_dim // 2)
@@ -48,8 +46,8 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         self.drop = nn.Dropout(p=dropout)
         self.relu = nn.ReLU() if not leaky else nn.LeakyReLU()
 
-    @staticmethod
     def build_conv_layer(
+        self,
         in_c,
         out_c,
         kernel_size: Union[Tuple[int, int], int] = (3, 3),

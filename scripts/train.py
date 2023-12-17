@@ -26,6 +26,7 @@ def train(
     dest_dir: str,
     root_dir: Optional[str] = None,
     batch_size: int = 1,
+    early_stop_thresh: int = 10,
     **kwargs,
 ):
     # Defining the model
@@ -80,7 +81,7 @@ def train(
         cnn=trainer.cnn_name,
         pretrained=trainer.pretrained,
         cnn_dropout=trainer.cnn_dropout,
-    ).to(device=device)
+    ).cuda()
 
     # Training settings
     optimizer = torch.optim.SGD(stgcnn_model.parameters(), lr=trainer.lr)
@@ -91,7 +92,6 @@ def train(
     writer = SummaryWriter(f"{dest_dir}/runs/social_collision_stgcnn_{timestamp}")
 
     best_vloss = 1_000_000.0
-    early_stop_thresh = 10
     log.info(f"Training for {epochs} epochs")
     for epoch_number in (pbar := tqdm(range(epochs))):
         pbar.set_description(f"EPOCH {epoch_number + 1}:")
