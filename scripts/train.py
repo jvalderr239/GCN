@@ -1,6 +1,7 @@
 import logging
 import logging.config
 from datetime import datetime
+from typing import Optional
 
 import torch
 from fire import Fire
@@ -20,8 +21,16 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 log.info(f"Working with {device} for training")
 
 
-def train(epochs: int, batch_size: int = 1, **kwargs):
+def train(
+    epochs: int,
+    dest_dir: str,
+    root_dir: Optional[str] = None,
+    batch_size: int = 1,
+    **kwargs,
+):
     # Defining the model
+    if root_dir is None:
+        root_dir = str(get_project_root() / "resources") + "/"
     trainer = train_utils.Trainer(**kwargs)
     log.info("Loading training set")
     loader_train = train_utils.generate_dataloader(
@@ -29,7 +38,7 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
         batch_size=batch_size,
         shuffle=True,
         num_workers=0,
-        root_dir=trainer.root_dir,
+        root_dir=root_dir,
         obs_len=trainer.seq_len,
         pred_len=trainer.pred_seq_len,
     )
@@ -39,7 +48,7 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
         batch_size=batch_size,
         shuffle=False,
         num_workers=1,
-        root_dir=trainer.root_dir,
+        root_dir=root_dir,
         obs_len=trainer.seq_len,
         pred_len=trainer.pred_seq_len,
     )
@@ -49,7 +58,7 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
         batch_size=batch_size,
         shuffle=False,
         num_workers=1,
-        root_dir=trainer.root_dir,
+        root_dir=root_dir,
         obs_len=trainer.seq_len,
         pred_len=trainer.pred_seq_len,
     )
@@ -79,9 +88,7 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
 
     # Initializing in a separate cell so we can easily add more epochs to the same run
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    writer = SummaryWriter(
-        f"{str(get_project_root())}/train_results/runs/social_collision_stgcnn_{timestamp}"
-    )
+    writer = SummaryWriter(f"{dest_dir}/runs/social_collision_stgcnn_{timestamp}")
 
     best_vloss = 1_000_000.0
     early_stop_thresh = 10
@@ -148,8 +155,7 @@ def train(epochs: int, batch_size: int = 1, **kwargs):
             best_vloss = avg_vloss
             best_epoch = epoch_number
             model_path = (
-                f"{str(get_project_root())}/train_results/"
-                "social_collision_stgcnn_{timestamp}_{epoch_number}.pt"
+                f"{dest_dir}/social_collision_stgcnn_{timestamp}_{epoch_number}.pt"
             )
             train_utils.checkpoint(stgcnn_model, model_path)
         elif epoch_number - best_epoch > early_stop_thresh:

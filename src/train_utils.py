@@ -43,7 +43,6 @@ class Trainer:
 
     # Train parameters
     lr: float = 0.01
-    root_dir: str = str(ROOT_DIR / "resources") + "/"
 
     def update(self, arg, value):
         setattr(self, arg, value)
