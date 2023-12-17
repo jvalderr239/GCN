@@ -5,7 +5,6 @@ from typing import Optional
 
 import torch
 from fire import Fire
-from torch.utils.data.dataloader import default_collate
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -42,7 +41,6 @@ def train(
         root_dir=root_dir,
         obs_len=trainer.seq_len,
         pred_len=trainer.pred_seq_len,
-        collate_fn=lambda x: tuple(x_.to(device) for x_ in default_collate(x))
     )
     log.info("Loading validation set")
     loader_val = train_utils.generate_dataloader(
@@ -53,7 +51,6 @@ def train(
         root_dir=root_dir,
         obs_len=trainer.seq_len,
         pred_len=trainer.pred_seq_len,
-        collate_fn=lambda x: tuple(x_.to(device) for x_ in default_collate(x))
     )
     log.info("Loading test set")
     loader_val = train_utils.generate_dataloader(
