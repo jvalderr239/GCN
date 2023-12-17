@@ -19,13 +19,13 @@ def criterion(
     V_pred, simo = outputs
     V_truth, _ = truth_labels["trajectory"], truth_labels["graph"]
     # Convert output feat
-    V_truth = V_truth.squeeze()
-    V_pred = V_pred.squeeze().permute(0, 2, 3, 1)
+    V_truth = V_truth.squeeze().to(device)
+    V_pred = V_pred.squeeze().permute(0, 2, 3, 1).to(device)
 
     losses += bivariate_graph_loss(V_pred, V_truth)
     # CNN Prediction loss
     for _, (key, pred) in enumerate(simo.items()):  # pylint-ignore: attr-defined
-        losses += loss_map[key](pred, truth_labels[key].to(device))
+        losses += loss_map[key](pred.to(device), truth_labels[key].to(device))
 
     return losses
 

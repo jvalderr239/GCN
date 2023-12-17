@@ -120,7 +120,7 @@ def train_one_epoch(
         V_obs_tmp = V_obs.permute(0, 3, 1, 2)
 
         # Make predictions for this batch
-        V_pred, _, simo = model(V_obs_tmp, A_obs.squeeze())
+        V_pred, _, simo = model(V_obs_tmp.to(device), A_obs.squeeze().to(device))
 
         # Compute the loss and its gradients
         loss = criterion((V_pred, simo), truth_labels.copy(), device)

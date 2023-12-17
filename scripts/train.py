@@ -125,7 +125,7 @@ def train(
 
                 # Make predictions for this batch
                 V_pred, _, simo = stgcnn_model(  # pylint: disable=not-callable
-                    V_obs_tmp, A_obs.squeeze()
+                    V_obs_tmp.to(device), A_obs.squeeze().to(device)
                 )
 
                 V_pred = V_pred.permute(0, 2, 3, 1)
