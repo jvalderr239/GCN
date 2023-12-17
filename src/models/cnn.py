@@ -156,7 +156,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         base_model = nn.Sequential(*first_conv_layer)
 
         # get output shape
-        x = randn(1, in_channels, 56, 22)
+        x = randn(5, in_channels, 56, 22)
         output_dim = base_model(x).size(1)
         return base_model, output_dim
 

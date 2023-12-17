@@ -81,7 +81,7 @@ def train(
         cnn=trainer.cnn_name,
         pretrained=trainer.pretrained,
         cnn_dropout=trainer.cnn_dropout,
-    ).cuda()
+    ).to(device)
 
     # Training settings
     optimizer = torch.optim.SGD(stgcnn_model.parameters(), lr=trainer.lr)
@@ -96,8 +96,6 @@ def train(
     for epoch_number in (pbar := tqdm(range(epochs))):
         pbar.set_description(f"EPOCH {epoch_number + 1}:")
 
-        # Make sure gradient tracking is on, and do a pass over the data
-        stgcnn_model.train(True)
         avg_loss = train_utils.train_one_epoch(
             epoch_index=epoch_number,
             model=stgcnn_model,
@@ -108,34 +106,13 @@ def train(
             device=device,
         )
 
-        running_vloss = 0.0
-        # Set the model to evaluation mode, disabling dropout and using population
-        # statistics for batch normalization.
-        stgcnn_model.eval()
+        avg_vloss = train_utils.validate(
+            model=stgcnn_model,
+            validation_loader=loader_val,
+            device=device,
+        )
 
-        # Disable gradient computation and reduce memory consumption.
-        with torch.no_grad():
-            for iv, vbatchdata in enumerate(loader_val):
-                V_obs, A_obs = vbatchdata["data"]
-                truth_labels = vbatchdata["labels"]
-
-                # V_obs = batch,seq,node,feat
-                # V_obs_tmp = batch,feat,seq,node
-                V_obs_tmp = V_obs.permute(0, 3, 1, 2)
-
-                # Make predictions for this batch
-                V_pred, _, simo = stgcnn_model(  # pylint: disable=not-callable
-                    V_obs_tmp.to(device), A_obs.squeeze().to(device)
-                )
-
-                V_pred = V_pred.permute(0, 2, 3, 1)
-                vloss = train_utils.criterion(
-                    (V_pred, simo), truth_labels.copy(), device
-                )
-                running_vloss += vloss
-
-        avg_vloss = running_vloss / (iv + 1)  # pylint: disable=undefined-loop-variable
-        log.info(f"LOSS train {avg_loss} valid {avg_vloss}".format(avg_loss, avg_vloss))
+        log.info(f"LOSS train: {avg_loss} valid: {avg_vloss}")
 
         before_lr = optimizer.param_groups[0]["lr"]
         scheduler.step()

@@ -31,7 +31,7 @@ class Trainer:
     seq_len: int = 25
     pred_seq_len: int = 30
     kernel_size: int = 3
-    cnn_name: Optional[str] = None
+    cnn_name: Optional[str] = "resnet50"
     pretrained: bool = True
     cnn_dropout: float = 0.3
     clip: Optional[float] = None
@@ -106,6 +106,9 @@ def train_one_epoch(
     last_loss = 0.0
     n_total_steps = len(training_loader)
 
+    # Make sure gradient tracking is on, and do a pass over the data
+    model.train(True)
+
     # Here, we use enumerate(training_loader) instead of
     # iter(training_loader) so that we can track the batch
     # index and do some intra-epoch reporting
@@ -144,3 +147,35 @@ def train_one_epoch(
             running_loss = 0.0
 
     return last_loss
+
+
+def validate(
+    model: nn.Module,
+    validation_loader: DataLoader,
+    device: Any,
+):
+    running_vloss = 0.0
+    # Set the model to evaluation mode, disabling dropout and using population
+    # statistics for batch normalization.
+    model.eval()
+
+    # Disable gradient computation and reduce memory consumption.
+    with torch.no_grad():
+        for iv, vbatchdata in enumerate(validation_loader):
+            V_obs, A_obs = vbatchdata["data"]
+            truth_labels = vbatchdata["labels"]
+
+            # V_obs = batch,seq,node,feat
+            # V_obs_tmp = batch,feat,seq,node
+            V_obs_tmp = V_obs.permute(0, 3, 1, 2)
+
+            # Make predictions for this batch
+            V_pred, _, simo = model(  # pylint: disable=not-callable
+                V_obs_tmp.to(device), A_obs.squeeze().to(device)
+            )
+            vloss = criterion((V_pred, simo), truth_labels.copy(), device)
+            running_vloss += vloss
+
+    avg_vloss = running_vloss / (iv + 1)  # pylint: disable=undefined-loop-variable
+
+    return avg_vloss
