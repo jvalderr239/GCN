@@ -22,7 +22,6 @@ setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        "albumentations==1.3.0",
         "torch==1.13.1",
         "torchvision==0.14.1",
         "torcheval",
@@ -47,5 +46,5 @@ setup(
             "pip-tools"
             ]
     },
-    python_requires=">=3.9"
+    python_requires=">=3.8, <3.10"
 )

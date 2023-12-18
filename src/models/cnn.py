@@ -77,7 +77,9 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         }
 
 
-class PRETRAINED_EVENT_PREDICTOR_CNN(EVENT_PREDICTOR):
+class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
+    compatible_backbones = ["efficientnet", "resnet"]
+
     def __init__(
         self,
         in_channels: int,
@@ -134,7 +136,9 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(EVENT_PREDICTOR):
                 f"Invalid model name: {name}."
                 f"Expected one of the following: {dir(models)}"
             )
-        if "resnet" not in name.lower():
+        if any(
+            [backbone not in name.lower() for backbone in self.compatible_backbones]
+        ):
             raise ValueError("Currently, there is only support for ResNet backbones...")
 
         selected_model: nn.Module = getattr(models, name.lower())(pretrained=pretrained)
