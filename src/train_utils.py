@@ -146,8 +146,8 @@ def train_one_epoch(
         running_event_acc += event_acc
         running_node_acc += node_acc
         running_time_acc += time_acc
-        if (i + 1) % (len(training_loader)) == 0:
-            last_loss = running_loss / 1000  # loss per batch
+        if (i + 1) % 10 == 0:
+            last_loss = running_loss / 10  # loss per 10 batches
             log.debug(f"batch {i + 1} loss: {last_loss}")
             tb_x = epoch_index * len(training_loader) + i + 1
             tb_writer.add_scalar("Loss/train", last_loss, tb_x)
@@ -187,7 +187,9 @@ def validate(
             V_pred, _, simo = model(  # pylint: disable=not-callable
                 V_obs_tmp.to(device), A_obs.squeeze().to(device)
             )
-            running_vloss += criterion((V_pred, simo), truth_labels.copy(), device).item()
+            running_vloss += criterion(
+                (V_pred, simo), truth_labels.copy(), device
+            ).item()
 
             # Compute accuracy
             event_acc, node_acc, time_acc = calc_accuracy(
