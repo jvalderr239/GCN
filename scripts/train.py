@@ -15,7 +15,7 @@ from src.utils import get_project_root
 # setup logger
 log_file_path = get_project_root() / "logging.conf"
 logging.config.fileConfig(str(log_file_path))
-log = logging.getLogger(__name__)
+log = logging.getLogger()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 log.info(f"Working with {device} for training")
@@ -94,9 +94,9 @@ def train(
     best_vloss = 1_000_000.0
     log.info(f"Training for {epochs} epochs")
     for epoch_number in (pbar := tqdm(range(epochs))):
-        pbar.set_description(f"EPOCH {epoch_number + 1}:")
+        pbar.set_description(f"EPOCH {epoch_number + 1}")
 
-        avg_loss = train_utils.train_one_epoch(
+        avg_loss, avg_e_acc, avg_n_acc, avg_t_acc = train_utils.train_one_epoch(
             epoch_index=epoch_number,
             model=stgcnn_model,
             training_loader=loader_train,
@@ -106,18 +106,27 @@ def train(
             device=device,
         )
 
-        avg_vloss = train_utils.validate(
+        log.info(f"Time Prediction Training Accuracy: {avg_t_acc}")
+        log.info(f"Event Type Training Accuracy: {avg_e_acc}")
+        log.info(f"Node Index Training Accuracy: {avg_n_acc}")
+
+        avg_vloss, avg_ve_acc, avg_vn_acc, avg_vt_acc = train_utils.validate(
             model=stgcnn_model,
             validation_loader=loader_val,
             device=device,
         )
 
-        log.info(f"LOSS train: {avg_loss} valid: {avg_vloss}")
+        log.info(f"Time Prediction Validation Accuracy: {avg_vt_acc}")
+        log.info(f"Event Type Validation Accuracy: {avg_ve_acc}")
+        log.info(f"Node Index Validation Accuracy: {avg_vn_acc}")
+
+        log.info(f"Training Loss: {avg_loss} Validation Loss: {avg_vloss}")
 
         before_lr = optimizer.param_groups[0]["lr"]
         scheduler.step()
         after_lr = optimizer.param_groups[0]["lr"]
-        log.info(f"Epoch {epoch_number}: SGD lr {before_lr:.4} -> {after_lr:.4}")
+        log.info(f"Epoch {epoch_number + 1}: SGD lr {before_lr:.4} -> {after_lr:.4}")
+
         # Log the running loss averaged per batch
         # for both training and validation
         writer.add_scalars(
@@ -125,19 +134,36 @@ def train(
             {"Training": avg_loss, "Validation": avg_vloss},
             epoch_number + 1,
         )
+        writer.add_scalars(
+            "Training vs. Validation Time Prediction Accuracy",
+            {"Training": avg_t_acc, "Validation": avg_vt_acc},
+            epoch_number + 1,
+        )
+        writer.add_scalars(
+            "Training vs. Validation Event Type Accuracy",
+            {"Training": avg_e_acc, "Validation": avg_ve_acc},
+            epoch_number + 1,
+        )
+        writer.add_scalars(
+            "Training vs. Validation Node Index Accuracy",
+            {"Training": avg_n_acc, "Validation": avg_vn_acc},
+            epoch_number + 1,
+        )
         writer.flush()
 
         # Track best performance, and save the model's state
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
-            best_epoch = epoch_number
+            best_epoch = epoch_number + 1
             model_path = (
-                f"{dest_dir}/social_collision_stgcnn_{timestamp}_{epoch_number}.pt"
+                f"{dest_dir}/social_collision_stgcnn_{timestamp}_{epoch_number + 1}.pt"
             )
             train_utils.checkpoint(stgcnn_model, model_path)
-        elif epoch_number - best_epoch > early_stop_thresh:
-            log.warning(f"Early stopped training at epoch {epoch_number}")
+        elif (epoch_number + 1) - best_epoch > early_stop_thresh:
+            log.warning(f"Early stopped training at epoch {epoch_number + 1}")
             break  # terminate the training loop
+
+    log.info("Finished Training...")
 
 
 if __name__ == "__main__":

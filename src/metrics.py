@@ -2,8 +2,50 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 import torch
-from torch import nn
-from torch.utils.data import DataLoader
+from torcheval.metrics import MeanSquaredError, MultilabelAccuracy
+
+multilabel_acc = MultilabelAccuracy()
+mse = MeanSquaredError()
+
+
+def calc_accuracy(
+    outputs: Dict[str, Any],
+    truth: Dict[str, Any],
+) -> Tuple[float, float, float]:
+    """
+        Compute accuracies for multilabel outputs
+
+    Arguments:
+        outputs -- Predictions
+        truth -- Truth labels
+
+    Returns:
+        Accuracy for each cnn output
+    """
+    time_acc = (
+        mse.update(outputs["time_of_event"].squeeze(), truth["time_of_event"].squeeze())
+        .compute()
+        .float()
+        .item()
+    )
+    event_acc = (
+        multilabel_acc.update(
+            outputs["event_type"].squeeze(), truth["event_type"].squeeze()
+        )
+        .compute()
+        .float()
+        .item()
+    )
+    node_acc = (
+        multilabel_acc.update(
+            outputs["node_index"].squeeze(), truth["node_index"].squeeze()
+        )
+        .compute()
+        .float()
+        .item()
+    )
+
+    return event_acc, node_acc, time_acc
 
 
 def criterion(
@@ -20,7 +62,7 @@ def criterion(
     # Trajectory loss
     V_pred, simo = outputs
     V_truth, _ = truth_labels["trajectory"], truth_labels["graph"]
-    # Convert output feat
+    # Convert output features (batch,seq,node,feat)
     V_truth = V_truth.squeeze().to(device)
     V_pred = V_pred.squeeze().permute(0, 2, 3, 1).to(device)
 

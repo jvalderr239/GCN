@@ -13,7 +13,7 @@ from .st_gcn import ST_GCN
 # setup logger
 log_file_path = get_project_root() / "logging.conf"
 logging.config.fileConfig(str(log_file_path))
-log = logging.getLogger(__name__)
+log = logging.getLogger("models")
 
 
 class SOCIAL_COLLISION_STGCNN(nn.Module):

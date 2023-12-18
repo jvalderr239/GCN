@@ -16,7 +16,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         leaky: bool = True,
     ):
         super().__init__()
-        self.name = self.__class__
+        self.name = self.__class__.__name__
 
         self.conv_layers = [
             self.build_conv_layer(
@@ -76,8 +76,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
             "time_of_event": self.time_of_event_fc(out),
         }
 
-
-class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
+class PRETRAINED_EVENT_PREDICTOR_CNN(EVENT_PREDICTOR):
     def __init__(
         self,
         in_channels: int,
@@ -89,7 +88,6 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         dropout: float = 0.3,
     ):
         super().__init__()
-        self.name = self.__class__
         self.cnn, cnn_output_dim = self._get_base_model(
             name=name.lower(),
             pretrained=pretrained,
@@ -129,6 +127,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         Returns:
             Tuple containing model and output size
         """
+        self.name = self.__class__.__name__
         if name.lower() not in dir(models):
             raise ValueError(
                 f"Invalid model name: {name}."
@@ -143,9 +142,6 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         if pretrained:
             for param in selected_model.parameters():
                 param.requires_grad = False
-            for i in range(-1, -5, -1):
-                for param in selected_model.features[i].parameters():
-                    param.requires_grad = True
 
         first_conv_layer = [
             nn.Conv2d(

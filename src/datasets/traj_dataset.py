@@ -16,7 +16,7 @@ from src.utils import get_project_root
 # setup logger
 log_file_path = get_project_root() / "logging.conf"
 logging.config.fileConfig(str(log_file_path))
-log = logging.getLogger(__name__)
+log = logging.getLogger("datasets")
 
 
 class DATA_COLUMNS(IntEnum):
@@ -54,7 +54,7 @@ class TrajectoryDataset(Dataset):
         max_frames: int = 70,
         batch_size=1,
         norm_lap_matr=True,
-        shuffle=True,
+        shuffle=False,
         field_width: float = 53.3,  # yards
         field_length: float = 120,  # yards
         max_player_angle: float = 360.0,  # degrees
@@ -113,10 +113,8 @@ class TrajectoryDataset(Dataset):
             max_frames=self.max_frames,
         )
         log.info(
-            f"Processing {len(frame_data)} plays ranging from"
-            "  {self.min_frames} to {self.max_frames} lengths..."
+            f"Processing {len(frame_data)} plays ranging from {fmin} to {fmax} lengths..."
         )
-        log.info(f"Data includes frame lengths starting from {fmin} to {fmax}")
 
         # Get player relevant attributes
         self.player_attributes = self.players_df.set_index("nflId")

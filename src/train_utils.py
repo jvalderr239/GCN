@@ -11,14 +11,14 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from .datasets import TrajectoryDataset
-from .metrics import criterion
+from .metrics import calc_accuracy, criterion
 from .utils import get_project_root
 
 # setup logger
 ROOT_DIR = get_project_root()
 log_file_path = ROOT_DIR / "logging.conf"
 logging.config.fileConfig(str(log_file_path))
-log = logging.getLogger(__name__)
+log = logging.getLogger("trainer")
 
 
 @dataclasses.dataclass
@@ -31,7 +31,7 @@ class Trainer:
     seq_len: int = 25
     pred_seq_len: int = 30
     kernel_size: int = 3
-    cnn_name: Optional[str] = "resnet50"
+    cnn_name: Optional[str] = "inceptionv3"
     pretrained: bool = True
     cnn_dropout: float = 0.3
     clip: Optional[float] = None
@@ -66,7 +66,8 @@ def generate_dataloader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        num_workers=num_workers,
+        num_workers=0 if datatype == "train" else 2,
+        pin_memory=True,
     )
 
 
@@ -104,7 +105,9 @@ def train_one_epoch(
 ):
     running_loss = 0.0
     last_loss = 0.0
-    n_total_steps = len(training_loader)
+    running_time_acc = 0.0
+    running_node_acc = 0.0
+    running_event_acc = 0.0
 
     # Make sure gradient tracking is on, and do a pass over the data
     model.train(True)
@@ -112,9 +115,8 @@ def train_one_epoch(
     # Here, we use enumerate(training_loader) instead of
     # iter(training_loader) so that we can track the batch
     # index and do some intra-epoch reporting
-    for i, batch_data in enumerate((pbar := tqdm(training_loader))):
+    for i, batch_data in enumerate(training_loader):
         # Every data instance is an input + label pair
-        pbar.set_description(f"{i+1}/{n_total_steps} batches")
         V_obs, A_obs = batch_data["data"]
         truth_labels = batch_data["labels"]
 
@@ -131,6 +133,7 @@ def train_one_epoch(
         # Compute the loss and its gradients
         loss = criterion((V_pred, simo), truth_labels.copy(), device)
         loss.backward()
+
         if clip is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip)
         # Adjust learning weights
@@ -139,14 +142,24 @@ def train_one_epoch(
         # Gather data and report
         running_loss += loss.item()
 
-        if (i + 1) % (int(n_total_steps)) == 0:
+        # Compute accuracy
+        event_acc, node_acc, time_acc = calc_accuracy(simo, truth_labels)
+        running_event_acc += event_acc
+        running_node_acc += node_acc
+        running_time_acc += time_acc
+        break
+        if (i + 1) % (len(training_loader)) == 0:
             last_loss = running_loss / 1000  # loss per batch
             log.debug(f"batch {i + 1} loss: {last_loss}")
             tb_x = epoch_index * len(training_loader) + i + 1
             tb_writer.add_scalar("Loss/train", last_loss, tb_x)
             running_loss = 0.0
 
-    return last_loss
+    avg_ve_acc = 100 * running_event_acc / len(training_loader)
+    avg_vn_acc = 100 * running_node_acc / len(training_loader)
+    avg_vt_acc = 100 * running_time_acc / len(training_loader)
+
+    return last_loss, avg_ve_acc, avg_vn_acc, avg_vt_acc
 
 
 def validate(
@@ -155,13 +168,16 @@ def validate(
     device: Any,
 ):
     running_vloss = 0.0
+    running_time_acc = 0.0
+    running_node_acc = 0.0
+    running_event_acc = 0.0
     # Set the model to evaluation mode, disabling dropout and using population
     # statistics for batch normalization.
     model.eval()
 
     # Disable gradient computation and reduce memory consumption.
     with torch.no_grad():
-        for iv, vbatchdata in enumerate(validation_loader):
+        for vbatchdata in validation_loader:
             V_obs, A_obs = vbatchdata["data"]
             truth_labels = vbatchdata["labels"]
 
@@ -173,9 +189,18 @@ def validate(
             V_pred, _, simo = model(  # pylint: disable=not-callable
                 V_obs_tmp.to(device), A_obs.squeeze().to(device)
             )
-            vloss = criterion((V_pred, simo), truth_labels.copy(), device)
-            running_vloss += vloss
+            running_vloss += criterion((V_pred, simo), truth_labels.copy(), device)
 
-    avg_vloss = running_vloss / (iv + 1)  # pylint: disable=undefined-loop-variable
+            # Compute accuracy
+            event_acc, node_acc, time_acc = calc_accuracy(simo, truth_labels)
+            running_event_acc += event_acc
+            running_node_acc += node_acc
+            running_time_acc += time_acc
+            break
 
-    return avg_vloss
+    avg_vloss = running_vloss / len(validation_loader)
+    avg_ve_acc = 100 * running_event_acc / len(validation_loader)
+    avg_vn_acc = 100 * running_node_acc / len(validation_loader)
+    avg_vt_acc = 100 * running_time_acc / len(validation_loader)
+
+    return avg_vloss, avg_ve_acc, avg_vn_acc, avg_vt_acc

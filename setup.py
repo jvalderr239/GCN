@@ -25,6 +25,7 @@ setup(
         "albumentations==1.3.0",
         "torch==1.13.1",
         "torchvision==0.14.1",
+        "torcheval",
         "tqdm==4.64.1",
         "numpy>=1.24, <1.26",
         "pandas<2.1,>2", 

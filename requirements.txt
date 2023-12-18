@@ -77,8 +77,9 @@ packaging==23.2
     # via
     #   fastparquet
     #   scikit-image
-pandas==2.1.4
+pandas==2.0.3
     # via
+    #   NFLBIGDATA-GCN (setup.py)
     #   fastparquet
     #   nfl-data-py
 pillow==10.1.0
@@ -143,6 +144,8 @@ torch==1.13.1
     # via
     #   NFLBIGDATA-GCN (setup.py)
     #   torchvision
+torcheval==0.0.7
+    # via NFLBIGDATA-GCN (setup.py)
 torchvision==0.14.1
     # via NFLBIGDATA-GCN (setup.py)
 tqdm==4.64.1
@@ -151,6 +154,7 @@ typing-extensions==4.8.0
     # via
     #   qudida
     #   torch
+    #   torcheval
     #   torchvision
 tzdata==2023.3
     # via pandas
