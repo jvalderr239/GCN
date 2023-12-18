@@ -9,8 +9,7 @@ mse = MeanSquaredError()
 
 
 def calc_accuracy(
-    outputs: Dict[str, Any],
-    truth: Dict[str, Any],
+    outputs: Dict[str, Any], truth: Dict[str, Any], device: Any
 ) -> Tuple[float, float, float]:
     """
         Compute accuracies for multilabel outputs
@@ -23,14 +22,18 @@ def calc_accuracy(
         Accuracy for each cnn output
     """
     time_acc = (
-        mse.update(outputs["time_of_event"].squeeze(), truth["time_of_event"].squeeze())
+        mse.update(
+            outputs["time_of_event"].squeeze().to(device),
+            truth["time_of_event"].squeeze().to(device),
+        )
         .compute()
         .float()
         .item()
     )
     event_acc = (
         multilabel_acc.update(
-            outputs["event_type"].squeeze(), truth["event_type"].squeeze()
+            outputs["event_type"].squeeze().to(device),
+            truth["event_type"].squeeze().to(device),
         )
         .compute()
         .float()
@@ -38,7 +41,8 @@ def calc_accuracy(
     )
     node_acc = (
         multilabel_acc.update(
-            outputs["node_index"].squeeze(), truth["node_index"].squeeze()
+            outputs["node_index"].squeeze().to(device),
+            truth["node_index"].squeeze().to(device),
         )
         .compute()
         .float()

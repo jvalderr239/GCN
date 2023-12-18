@@ -137,7 +137,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
                 f"Expected one of the following: {dir(models)}"
             )
         if not any(
-            [backbone not in name.lower() for backbone in self.compatible_backbones]
+            (backbone not in name.lower() for backbone in self.compatible_backbones)
         ):
             raise ValueError("Currently, there is only support for ResNet backbones...")
 

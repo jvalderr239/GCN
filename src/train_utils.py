@@ -8,7 +8,6 @@ from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
 
 from .datasets import TrajectoryDataset
 from .metrics import calc_accuracy, criterion
@@ -66,7 +65,7 @@ def generate_dataloader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        num_workers=0 if datatype == "train" else 2,
+        num_workers=0 if datatype == "train" else num_workers,
         pin_memory=True,
     )
 
@@ -143,7 +142,7 @@ def train_one_epoch(
         running_loss += loss.item()
 
         # Compute accuracy
-        event_acc, node_acc, time_acc = calc_accuracy(simo, truth_labels)
+        event_acc, node_acc, time_acc = calc_accuracy(simo, truth_labels.copy(), device)
         running_event_acc += event_acc
         running_node_acc += node_acc
         running_time_acc += time_acc
@@ -191,7 +190,9 @@ def validate(
             running_vloss += criterion((V_pred, simo), truth_labels.copy(), device)
 
             # Compute accuracy
-            event_acc, node_acc, time_acc = calc_accuracy(simo, truth_labels)
+            event_acc, node_acc, time_acc = calc_accuracy(
+                simo, truth_labels.copy(), device
+            )
             running_event_acc += event_acc
             running_node_acc += node_acc
             running_time_acc += time_acc
