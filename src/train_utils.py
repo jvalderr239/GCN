@@ -187,7 +187,7 @@ def validate(
             V_pred, _, simo = model(  # pylint: disable=not-callable
                 V_obs_tmp.to(device), A_obs.squeeze().to(device)
             )
-            running_vloss += criterion((V_pred, simo), truth_labels.copy(), device)
+            running_vloss += criterion((V_pred, simo), truth_labels.copy(), device).item()
 
             # Compute accuracy
             event_acc, node_acc, time_acc = calc_accuracy(
