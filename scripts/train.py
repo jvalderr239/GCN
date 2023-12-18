@@ -138,7 +138,6 @@ def train(
         elif epoch_number - best_epoch > early_stop_thresh:
             log.warning(f"Early stopped training at epoch {epoch_number}")
             break  # terminate the training loop
-        epoch_number += 1
 
 
 if __name__ == "__main__":

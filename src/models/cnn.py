@@ -82,7 +82,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         self,
         in_channels: int,
         name: str,
-        pretrained: bool,
+        pretrained: bool = True,
         num_events: int = 1,
         num_nodes: int = 22,
         kernel_size: int = 3,
@@ -136,7 +136,17 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
             )
         if "resnet" not in name.lower():
             raise ValueError("Currently, there is only support for ResNet backbones...")
+
         selected_model: nn.Module = getattr(models, name.lower())(pretrained=pretrained)
+
+        # Fine-tune pretrained model
+        if pretrained:
+            for param in selected_model.parameters():
+                param.requires_grad = False
+            for i in range(-1, -5, -1):
+                for param in selected_model.features[i].parameters():
+                    param.requires_grad = True
+
         first_conv_layer = [
             nn.Conv2d(
                 in_channels=in_channels,
