@@ -32,11 +32,11 @@ setup(
         "networkx",
         "tensorboard",
         "fire",
-        "nfl_data_py"
+        "nfl_data_py",
+        "matplotlib", 
     ],
     extras_require={
         "dev": [
-            "matplotlib", 
             "jupyter",
             "ipykernel",
             "torchsummary",
