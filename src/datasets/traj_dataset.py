@@ -85,7 +85,7 @@ class TrajectoryDataset(Dataset):
 
         # Extract appropriate data by frame range
         self.field_width, self.field_length = field_width, field_length
-        self._frame_features = ["x", "y", "dis", "o", "dir", "time"]
+        self._frame_features = ["x", "y", "s", "a", "dis", "o", "dir", "time"]
         self._plays_features = [
             "yardsToGo",
             "quarter",
@@ -144,7 +144,7 @@ class TrajectoryDataset(Dataset):
 
         # Format data and labels
 
-        self.data = frame_data  # self.__format_data(frame_data)
+        self.data = frame_data
 
         # Dataset attributes
         self.num_features = 21
@@ -226,6 +226,9 @@ class TrajectoryDataset(Dataset):
             if merged_plays_df[self._plays_features].isnull().values.any():
                 continue
 
+            if grouped_game[self._frame_features].isnull().values.any():
+                continue
+
             frame_max = max(frame_max, num_sequences)
             frame_min = min(frame_min, num_sequences)
             frames = grouped_game["frameId"].unique()
@@ -285,6 +288,7 @@ class TrajectoryDataset(Dataset):
         ).total_seconds()
 
         # Parse entire play and collect relevant attributes for each player
+        prev_features_df = first_frame[self._frame_features]
         for frames in lst_of_frames:
             frame = frames.sort_values(by=["nflId"])
             merged_games = pd.merge(
@@ -306,12 +310,16 @@ class TrajectoryDataset(Dataset):
             # Temporal data takes into account position, velocity, acceleration
             # distance traveled, orientation, angle of player motion,
             # whether player on home team, has possession, is ball carrier
-            x_vals, y_vals = (
-                frame[["x"]].values / self.field_length,
-                frame[["y"]].values / self.field_width,
-            )
-            s_vals = (frame[["s"]] - self.mean_speed) / self.std_speed
-            a_vals = (frame[["a"]] - self.mean_acc) / self.std_acc
+
+            # X and Y denote relative displacements from start of play
+            x_vals = frame[["x"]].values - prev_features_df[["x"]].values
+            y_vals = frame[["y"]].values - prev_features_df[["y"]].values
+            s_vals = frame[["s"]].values - prev_features_df[["s"]].values
+            a_vals = frame[["a"]].values - prev_features_df[["a"]].values
+
+            # Update previous features
+            prev_features_df = frame[self._frame_features]
+            # Normalize other numeric features by the statistics of the entire set
             dis_vals = (
                 frame[["dis"]] - self.mean_distance_traveled
             ) / self.std_distance_traveled
@@ -319,6 +327,7 @@ class TrajectoryDataset(Dataset):
                 frame[["o"]].values / self.max_angle,
                 frame[["dir"]].values / self.max_angle,
             )
+
             weight_vals = (
                 (
                     self.player_attributes.loc[frame["nflId"]]["weight"].values
@@ -496,12 +505,18 @@ class TrajectoryDataset(Dataset):
         """
         Compute the influence from one player1 to player2.
         The influence is computed by the l2 norm of
-            position, velocity and acceleration
+            position, velocity and acceleration.
+        The influence should increase with a smaller relative
+            distance and
         """
         NORM = math.sqrt(
             (player1[DATA_COLUMNS.X] - player2[DATA_COLUMNS.X]) ** 2
             + (player1[DATA_COLUMNS.Y] - player2[DATA_COLUMNS.Y]) ** 2
         )
+        NORM_SPEED_ACC = math.sqrt(
+            (player1[DATA_COLUMNS.SPEED] - player2[DATA_COLUMNS.SPEED]) ** 2
+            + (player1[DATA_COLUMNS.ACC] - player2[DATA_COLUMNS.ACC]) ** 2
+        )
         if NORM == 0:
             return 0
-        return 1 / (NORM)
+        return NORM_SPEED_ACC / NORM

@@ -26,7 +26,7 @@ def train(
     dest_dir: str,
     root_dir: Optional[str] = None,
     batch_size: int = 1,
-    early_stop_thresh: int = 10,
+    early_stop_thresh: int = 50,
     **kwargs,
 ):
     # Defining the model

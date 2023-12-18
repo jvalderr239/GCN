@@ -118,7 +118,6 @@ def train_one_epoch(
         # Every data instance is an input + label pair
         V_obs, A_obs = batch_data["data"]
         truth_labels = batch_data["labels"]
-
         # Zero your gradients for every batch!
         optimizer.zero_grad()
 
@@ -169,16 +168,16 @@ def validate(
     running_time_acc = 0.0
     running_node_acc = 0.0
     running_event_acc = 0.0
+    avg_vloss = 0.0
     # Set the model to evaluation mode, disabling dropout and using population
     # statistics for batch normalization.
     model.eval()
 
     # Disable gradient computation and reduce memory consumption.
     with torch.no_grad():
-        for vbatchdata in validation_loader:
+        for iv, vbatchdata in enumerate(validation_loader):
             V_obs, A_obs = vbatchdata["data"]
             truth_labels = vbatchdata["labels"]
-
             # V_obs = batch,seq,node,feat
             # V_obs_tmp = batch,feat,seq,node
             V_obs_tmp = V_obs.permute(0, 3, 1, 2)
@@ -190,7 +189,9 @@ def validate(
             running_vloss += criterion(
                 (V_pred, simo), truth_labels.copy(), device
             ).item()
-
+            if (iv + 1) % 10 == 0:
+                avg_vloss += running_vloss / 10  # per 10 batches
+                running_vloss = 0
             # Compute accuracy
             event_acc, node_acc, time_acc = calc_accuracy(
                 simo, truth_labels.copy(), device
