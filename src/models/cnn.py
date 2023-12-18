@@ -76,6 +76,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
             "time_of_event": self.time_of_event_fc(out),
         }
 
+
 class PRETRAINED_EVENT_PREDICTOR_CNN(EVENT_PREDICTOR):
     def __init__(
         self,

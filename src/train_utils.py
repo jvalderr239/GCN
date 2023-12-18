@@ -147,7 +147,6 @@ def train_one_epoch(
         running_event_acc += event_acc
         running_node_acc += node_acc
         running_time_acc += time_acc
-        break
         if (i + 1) % (len(training_loader)) == 0:
             last_loss = running_loss / 1000  # loss per batch
             log.debug(f"batch {i + 1} loss: {last_loss}")
@@ -196,7 +195,6 @@ def validate(
             running_event_acc += event_acc
             running_node_acc += node_acc
             running_time_acc += time_acc
-            break
 
     avg_vloss = running_vloss / len(validation_loader)
     avg_ve_acc = 100 * running_event_acc / len(validation_loader)
