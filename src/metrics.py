@@ -19,7 +19,6 @@ def compute_ade(pred: torch.Tensor, truth: torch.Tensor):
     """
     assert pred.size() == truth.size()
     N, T, *_ = pred.size()
-    print(pred.size(), truth.size())
     # Calculate average error for each node
     # (batch, seq, node, feat) -> (node, batch, seq, feat)
     truth = truth.permute(2, 0, 1, 3)
@@ -27,7 +26,6 @@ def compute_ade(pred: torch.Tensor, truth: torch.Tensor):
     pred_np, truth_np = pred.numpy(), truth.numpy()
     x_sq_err = np.square(pred_np[..., 0] - truth_np[..., 0])
     y_sq_err = np.square(pred_np[..., 1] - truth_np[..., 1])
-    print(np.array(x_sq_err + y_sq_err).shape)
 
     ade = np.sum(np.sum(x_sq_err + y_sq_err, axis=-1), axis=-1) / (N * T)
 

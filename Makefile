@@ -33,7 +33,7 @@ all: venv
 
 $(VENV)/bin/activate: requirements.txt setup.py
 	test -d $(VENV) || ${PYTHON_VERSION} -m venv $(VENV)
-	${PIP} pip black isort mypy pytest coverage pylint 
+	${PIP} pip "black<23" isort mypy pytest coverage pylint 
 	${PIP} -r requirements.txt
 
 help:

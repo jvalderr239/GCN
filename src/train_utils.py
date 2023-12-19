@@ -223,6 +223,11 @@ def test(
     # Set the model to evaluation mode, disabling dropout and using population
     # statistics for batch normalization.
     model.eval()
+    running_tloss = 0.0
+    running_time_acc = 0.0
+    running_node_acc = 0.0
+    running_event_acc = 0.0
+    avg_tloss = 0.0
 
     ade, fde = [], []
     # Disable gradient computation and reduce memory consumption.
@@ -266,6 +271,20 @@ def test(
             # V_pred includes x, y, sx, sy, corr deviations
             V_pred, simo = infer(model, V_obs=V_obs, A_obs=A_obs, device=device)
 
+            running_tloss += criterion(
+                (V_pred, simo), truth_labels.copy(), device
+            ).item()
+            if (i + 1) % 10 == 0:
+                avg_vloss += running_tloss / 10  # per 10 batches
+                running_tloss = 0
+            # Compute accuracy
+            event_acc, node_acc, time_acc = compute_accuracy(
+                simo, truth_labels.copy(), device
+            )
+            running_event_acc += event_acc
+            running_node_acc += node_acc
+            running_time_acc += time_acc
+
             # Get multivariate variables from generated deviation data
             *_, cov, mean = compute_bivariate_params(V_pred=V_pred)
             mvnormal = torch.distributions.multivariate_normal.MultivariateNormal(
@@ -304,7 +323,12 @@ def test(
                 )
             ade.append(sample_ade)
             fde.append(sample_fde)
-        res_ade = np.sum(np.array(ade)) / len(ade)
-        res_fde = np.sum(np.array(fde)) / len(fde)
 
-        return res_ade, res_fde
+    avg_tloss = running_tloss / len(test_loader)
+    avg_te_acc = 100 * running_event_acc / len(test_loader)
+    avg_tn_acc = 100 * running_node_acc / len(test_loader)
+    avg_tt_acc = 100 * running_time_acc / len(test_loader)
+    res_ade = np.sum(np.array(ade)) / len(ade)
+    res_fde = np.sum(np.array(fde)) / len(fde)
+
+    return res_ade, res_fde, avg_tloss, avg_te_acc, avg_tn_acc, avg_tt_acc

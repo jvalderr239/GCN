@@ -92,6 +92,7 @@ def train(
     writer = SummaryWriter(f"{dest_dir}/runs/social_collision_stgcnn_{timestamp}")
 
     best_vloss = 1_000_000.0
+
     log.info(f"Training for {epochs} epochs")
     for epoch_number in (pbar := tqdm(range(epochs))):
         pbar.set_description(f"EPOCH {epoch_number + 1}")
@@ -162,11 +163,17 @@ def train(
             break  # terminate the training loop
 
     log.info("Validating against test set")
-    ade, fde = train_utils.test(
+    ade, fde, avg_tloss, avg_te_acc, avg_tn_acc, avg_tt_acc = train_utils.test(
         model=stgcnn_model,
         test_loader=loader_test,
         device=device,
     )
+
+    log.info(f"Time Prediction Test MSE: {avg_tt_acc}")
+    log.info(f"Event Type Test Accuracy: {avg_te_acc}")
+    log.info(f"Node Index Test Accuracy: {avg_tn_acc}")
+
+    log.info(f"Test Loss: {avg_tloss}")
     log.info(f"ADE: {ade}, FDE: {fde}")
     log.info("Finished Training...")
 
