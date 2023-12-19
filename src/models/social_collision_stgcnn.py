@@ -48,7 +48,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         *,
         cnn: Optional[str] = None,
         pretrained: bool = True,
-        blocks_to_retrain: int = 15,
+        blocks_to_retrain: float = 0.5,
         cnn_dropout: float = 0.3,
         **kwargs,
     ):
@@ -76,7 +76,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         for _ in range(self.n_txpcnn):
             self.prelus.append(nn.PReLU())
 
-        self.cnn = (
+        self._cnn = (
             PRETRAINED_EVENT_PREDICTOR_CNN(
                 in_channels=input_cnn_feat,
                 name=cnn,
@@ -94,10 +94,10 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
                 dropout=cnn_dropout,
             )
         )
-        log.info(
-            f"Built {self.cnn.name.lower()} model for prediction"  # pylint: disable=union-attr, operator
-        )
-        self.name = f"SOCIAL_COLLISON_STGCNN_{self.cnn.name}"  # pylint: disable=union-attr, operator
+        log.info(f"Built {str(self._cnn).lower()} model for prediction")
+
+    def __str__(self):
+        return f"SOCIAL_COLLISON_STGCNN_{str(self._cnn)}"
 
     def forward(self, v, a):
         """
@@ -111,7 +111,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         # Use feature extractor to predict tackle, tackler and time of attack
         # Use the spatial node output along with categorical features
         cnn_input = torch.concat((v, v_original[:, self.num_spatial_nodes :]), dim=1)
-        simo = self.cnn(cnn_input)
+        simo = self._cnn(cnn_input)
         v = v.view(v.shape[0], v.shape[2], v.shape[1], v.shape[3])
 
         v = self.prelus[0](self.tpcnns[0](v))

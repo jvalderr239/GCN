@@ -1,8 +1,17 @@
+import logging
+import logging.config
 from typing import Any, Dict, Tuple
 
 import numpy as np
 import torch
 from torcheval.metrics import MeanSquaredError, MultilabelAccuracy
+
+from src.utils import get_project_root
+
+# setup logger
+log_file_path = get_project_root() / "logging.conf"
+logging.config.fileConfig(str(log_file_path))
+log = logging.getLogger("metrics")
 
 multilabel_acc = MultilabelAccuracy()
 mse = MeanSquaredError()
@@ -112,7 +121,7 @@ def criterion(
 
     # Trajectory loss
     V_pred, simo = outputs
-    V_truth, _ = truth_labels["trajectory_relative"], truth_labels["graph"]
+    V_truth = truth_labels["trajectory_relative"]
     # Convert output features (batch,seq,node,feat)
     V_truth = V_truth.squeeze().to(device)
     V_pred = V_pred.squeeze().to(device)
@@ -120,7 +129,13 @@ def criterion(
     losses += bivariate_graph_loss(V_pred, V_truth)
     # CNN Prediction loss
     for k, loss_fn in loss_map.items():  # pylint-ignore: attr-defined
-        losses += loss_fn(simo[k].to(device), truth_labels[k].to(device))
+        try:
+            losses += loss_fn(simo[k].to(device), truth_labels[k].to(device))
+        except Exception:
+            log.error(
+                "Something went wrong when computing loss. Most likely vanishing gradients..."
+            )
+            raise
 
     return losses
 

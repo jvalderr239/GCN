@@ -55,6 +55,9 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         self.drop = nn.Dropout(p=dropout)
         self.relu = nn.ReLU() if not leaky else nn.LeakyReLU()
 
+    def __str__(self):
+        return "convolutional_predictor"
+
     def build_conv_layer(
         self,
         in_c,
@@ -98,7 +101,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         num_nodes: int = 22,
         kernel_size: int = 3,
         dropout: float = 0.3,
-        blocks_to_retrain: int = 5,
+        blocks_to_retrain: float = 0.5,
     ):
         super().__init__()
         self.cnn, cnn_output_dim = self._get_base_model(
@@ -124,13 +127,16 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
             nn.LeakyReLU(),
         )
 
+    def __str__(self):
+        return f"{self._model_name}_predictor"
+
     def _get_base_model(
         self,
         name: str,
         pretrained: bool,
         in_channels: int,
         kernel_size: int,
-        blocks_to_retrain: int,
+        blocks_to_retrain: float,
     ):
         """
         Generate base model and reformat with convolutional layer to reshape as
@@ -154,15 +160,16 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
             raise ValueError("Currently, there is only support for ResNet backbones...")
 
         selected_model: nn.Module = getattr(models, name.lower())(pretrained=pretrained)
-        self.name: str = f"{name.capitalize()}_PREDICTOR"
+        self._model_name: str = f"{name.capitalize()}_PREDICTOR"
         # Fine-tune pretrained model
         if pretrained:
             num_params = len(list(selected_model.parameters()))
+            num_blocks_to_retrain = int(blocks_to_retrain * num_params)
             log.debug(
-                f"Loaded model has {num_params}... Unfreezing {blocks_to_retrain}"
+                f"Loaded model has {num_params}... Unfreezing {num_blocks_to_retrain}"
             )
             for i, (pname, param) in enumerate(selected_model.named_parameters()):
-                if i + 1 >= (num_params - blocks_to_retrain):
+                if i + 1 >= (num_params - num_blocks_to_retrain):
                     log.debug(f"Unfreezing {pname}")
                     param.requires_grad = True
                 else:

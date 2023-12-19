@@ -1,6 +1,7 @@
 import dataclasses
 import logging
 import logging.config
+from collections import defaultdict
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -35,8 +36,8 @@ class Trainer:
     cnn_name: Optional[str] = "efficientnet_b0"
     pretrained: bool = True
     cnn_dropout: float = 0.3
-    blocks_to_retrain: int = 99
-    clip: Optional[float] = None
+    blocks_to_retrain: float = 0.5
+    clip: Optional[float] = 1.0
 
     # Dataset parameters
     num_features = 21
@@ -44,13 +45,13 @@ class Trainer:
     num_nodes = 22
 
     # Train parameters
-    lr: float = 0.05
+    lr: float = 0.01
 
     def update(self, arg, value):
         setattr(self, arg, value)
 
     def get_scheduler(self, optimizer):
-        return lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+        return lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.1)
 
 
 def generate_dataloader(
@@ -228,10 +229,11 @@ def validate(
 
 def test(
     model: nn.Module, test_loader: DataLoader, device: Any, sample_steps: int = 20
-) -> Tuple[float, ...]:
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # Set the model to evaluation mode, disabling dropout and using population
     # statistics for batch normalization.
     model.eval()
+    # Keep track of metrics
     running_tloss = 0.0
     running_time_acc = 0.0
     running_node_acc = 0.0
@@ -239,6 +241,8 @@ def test(
     avg_tloss = 0.0
 
     ade, fde = [], []
+    tracking_data: Dict[str, Any] = defaultdict(dict)
+
     # Disable gradient computation and reduce memory consumption.
     with torch.no_grad():
         for i, batch in enumerate(test_loader):
@@ -276,6 +280,8 @@ def test(
                 (V_tr_x_abs.unsqueeze(-1), V_tr_y_abs.unsqueeze(-1)), dim=-1
             )
 
+            tracking_data[str(i)]["obs"] = V_obs_abs
+            tracking_data[str(i)]["target"] = V_tr_abs
             # Generate deviation data from predictions
             # V_pred includes x, y, sx, sy, corr deviations
             V_pred, simo = infer(model, V_obs=V_obs, A_obs=A_obs, device=device)
@@ -301,6 +307,7 @@ def test(
             )
 
             sample_ade, sample_fde = np.empty((num_nodes, 1)), np.empty((num_nodes, 1))
+            tracking_data[str(i)]["pred"] = []
             for _ in range(sample_steps):
                 V_sample = mvnormal.sample()
 
@@ -313,6 +320,7 @@ def test(
                 V_sample_abs = torch.concat(
                     (V_sample_x_abs.unsqueeze(-1), V_sample_y_abs.unsqueeze(-1)), dim=-1
                 )
+                tracking_data[str(i)]["pred"].append(V_sample_abs)
                 ade_per_node = compute_ade(
                     V_sample_abs.contiguous(), V_tr_abs.contiguous()
                 )
@@ -340,4 +348,14 @@ def test(
     res_ade = float(np.sum(np.array(ade)) / len(ade))
     res_fde = float(np.sum(np.array(fde)) / len(fde))
 
-    return res_ade, res_fde, avg_tloss, avg_te_acc, avg_tn_acc, avg_tt_acc
+    result_metrics = {
+        "avg_test_loss": avg_tloss,
+        "avg_ade": res_ade,
+        "avg_fde": res_fde,
+        "accuracy": {
+            "event_type": avg_te_acc,
+            "node_index": avg_tn_acc,
+            "time_of_event": avg_tt_acc,
+        },
+    }
+    return result_metrics, tracking_data

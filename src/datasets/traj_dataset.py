@@ -223,7 +223,16 @@ class TrajectoryDataset(Dataset):
                 left_on=["gameId", "playId"],
                 right_on=["gameId", "playId"],
             )
-            if merged_plays_df[self._plays_features].isnull().values.any():
+            merged_players_df = pd.merge(
+                self.players_df,
+                grouped_game,
+                left_on=["nflId"],
+                right_on=["nflId"],
+            )
+            if (
+                merged_plays_df[self._plays_features].isnull().values.any()
+                or merged_players_df[["weight"]].isnull().values.any()
+            ):
                 continue
 
             if grouped_game[self._frame_features].isnull().values.any():
