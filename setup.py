@@ -34,6 +34,7 @@ setup(
         "fire",
         "nfl_data_py",
         "matplotlib", 
+        "scipy"
     ],
     extras_require={
         "dev": [

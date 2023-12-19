@@ -32,7 +32,7 @@ class Trainer:
     seq_len: int = 25
     pred_seq_len: int = 30
     kernel_size: int = 3
-    cnn_name: Optional[str] = "inceptionv3"
+    cnn_name: Optional[str] = "efficientnet_b0"
     pretrained: bool = True
     cnn_dropout: float = 0.3
     blocks_to_retrain: int = 99
@@ -50,7 +50,7 @@ class Trainer:
         setattr(self, arg, value)
 
     def get_scheduler(self, optimizer):
-        return lr_scheduler.ExponentialLR(optimizer, gamma=0.2)
+        return lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
 
 def generate_dataloader(
@@ -62,7 +62,7 @@ def generate_dataloader(
     **kwargs,
 ) -> DataLoader:
     dataset = generate_trajectory_dataset(
-        datatype=datatype, root_dir=root_dir, **kwargs
+        datatype=datatype, root_dir=root_dir, shuffle=shuffle, **kwargs
     )
     return DataLoader(
         dataset,
@@ -74,7 +74,11 @@ def generate_dataloader(
 
 
 def generate_trajectory_dataset(
-    datatype: str, obs_len: int, pred_len: int, root_dir: Optional[str] = None
+    datatype: str,
+    obs_len: int,
+    pred_len: int,
+    root_dir: Optional[str] = None,
+    shuffle=False,
 ) -> Dataset:
     if datatype not in ("train", "validation", "test"):
         raise ValueError("Invalid datatype. Expected one of(train, validation, test)")
@@ -84,7 +88,11 @@ def generate_trajectory_dataset(
         log.debug(f"Defaulting to root: {root_dir}")
 
     return TrajectoryDataset(
-        datatype=datatype, root_dir=root_dir, obs_len=obs_len, pred_len=pred_len
+        datatype=datatype,
+        root_dir=root_dir,
+        obs_len=obs_len,
+        pred_len=pred_len,
+        shuffle=shuffle,
     )
 
 

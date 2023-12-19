@@ -38,7 +38,7 @@ def train(
         "train",
         batch_size=batch_size,
         shuffle=True,
-        num_workers=0,
+        num_workers=6,
         root_dir=root_dir,
         obs_len=trainer.seq_len,
         pred_len=trainer.pred_seq_len,
@@ -48,7 +48,7 @@ def train(
         "validation",
         batch_size=batch_size,
         shuffle=False,
-        num_workers=1,
+        num_workers=6,
         root_dir=root_dir,
         obs_len=trainer.seq_len,
         pred_len=trainer.pred_seq_len,
@@ -58,7 +58,7 @@ def train(
         "test",
         batch_size=batch_size,
         shuffle=False,
-        num_workers=1,
+        num_workers=6,
         root_dir=root_dir,
         obs_len=trainer.seq_len,
         pred_len=trainer.pred_seq_len,
@@ -85,7 +85,14 @@ def train(
     ).to(device)
 
     # Training settings
-    optimizer = torch.optim.SGD(stgcnn_model.parameters(), lr=trainer.lr)
+    optimizer = torch.optim.Adam(
+        stgcnn_model.parameters(),
+        lr=trainer.lr,
+        betas=(0.9, 0.999),
+        eps=1e-08,
+        weight_decay=0,
+        amsgrad=False,
+    )
     scheduler = trainer.get_scheduler(optimizer=optimizer)
 
     # Initializing in a separate cell so we can easily add more epochs to the same run

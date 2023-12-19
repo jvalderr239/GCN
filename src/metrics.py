@@ -119,8 +119,8 @@ def criterion(
 
     losses += bivariate_graph_loss(V_pred, V_truth)
     # CNN Prediction loss
-    for _, (key, pred) in enumerate(simo.items()):  # pylint-ignore: attr-defined
-        losses += loss_map[key](pred.to(device), truth_labels[key].to(device))
+    for k, loss in loss_map.items():  # pylint-ignore: attr-defined
+        losses += loss(simo[k].to(device), truth_labels[k].to(device))
 
     return losses
 
