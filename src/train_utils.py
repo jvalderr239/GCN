@@ -35,6 +35,7 @@ class Trainer:
     cnn_name: Optional[str] = "inceptionv3"
     pretrained: bool = True
     cnn_dropout: float = 0.3
+    blocks_to_retrain: int = 99
     clip: Optional[float] = None
 
     # Dataset parameters

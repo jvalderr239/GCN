@@ -81,6 +81,7 @@ def train(
         cnn=trainer.cnn_name,
         pretrained=trainer.pretrained,
         cnn_dropout=trainer.cnn_dropout,
+        blocks_to_retrain=trainer.blocks_to_retrain,
     ).to(device)
 
     # Training settings
