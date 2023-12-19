@@ -121,7 +121,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         self.time_of_event_fc = nn.Sequential(
             nn.Dropout(p=dropout),
             nn.Linear(in_features=cnn_output_dim, out_features=num_events),
-            nn.ReLU(),
+            nn.LeakyReLU(),
         )
 
     def _get_base_model(

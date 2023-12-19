@@ -44,7 +44,7 @@ class Trainer:
     num_nodes = 22
 
     # Train parameters
-    lr: float = 0.01
+    lr: float = 0.05
 
     def update(self, arg, value):
         setattr(self, arg, value)
