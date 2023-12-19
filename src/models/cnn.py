@@ -164,7 +164,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         # Fine-tune pretrained model
         if pretrained:
             num_params = len(list(selected_model.parameters()))
-            num_blocks_to_retrain = int(blocks_to_retrain * num_params)
+            num_blocks_to_retrain = min(int(blocks_to_retrain * num_params), num_params)
             log.debug(
                 f"Loaded model has {num_params}... Unfreezing {num_blocks_to_retrain}"
             )
