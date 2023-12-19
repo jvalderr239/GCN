@@ -42,7 +42,7 @@ help:
 # venv is a shortcut target
 venv: $(VENV)/bin/activate
 
-check: venv check-format check-types lint
+check: venv format check-types lint
 
 check-format:
 	${PYTHON} black --check ${python_src}

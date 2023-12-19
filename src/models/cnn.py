@@ -1,7 +1,16 @@
+import logging
+import logging.config
 from typing import Tuple, Union
 
 from torch import flatten, nn, randn
 from torchvision import models
+
+from src.utils import get_project_root
+
+# setup logger
+log_file_path = get_project_root() / "logging.conf"
+logging.config.fileConfig(str(log_file_path))
+log = logging.getLogger("models")
 
 
 class EVENT_PREDICTOR_CNN(nn.Module):
@@ -16,7 +25,7 @@ class EVENT_PREDICTOR_CNN(nn.Module):
         leaky: bool = True,
     ):
         super().__init__()
-        self.name = self.__class__.__name__
+        self.name: str = self.__class__.__name__
 
         self.conv_layers = [
             self.build_conv_layer(
@@ -89,6 +98,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         num_nodes: int = 22,
         kernel_size: int = 3,
         dropout: float = 0.3,
+        blocks_to_retrain: int = 5,
     ):
         super().__init__()
         self.cnn, cnn_output_dim = self._get_base_model(
@@ -96,6 +106,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
             pretrained=pretrained,
             in_channels=in_channels,
             kernel_size=kernel_size,
+            blocks_to_retrain=blocks_to_retrain,
         )
         self.event_type_fc = nn.Sequential(
             nn.Dropout(p=dropout),
@@ -119,6 +130,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         pretrained: bool,
         in_channels: int,
         kernel_size: int,
+        blocks_to_retrain: int,
     ):
         """
         Generate base model and reformat with convolutional layer to reshape as
@@ -142,11 +154,19 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
             raise ValueError("Currently, there is only support for ResNet backbones...")
 
         selected_model: nn.Module = getattr(models, name.lower())(pretrained=pretrained)
-        self.name = f"{name.capitalize()}_PREDICTOR"
+        self.name: str = f"{name.capitalize()}_PREDICTOR"
         # Fine-tune pretrained model
         if pretrained:
-            for param in selected_model.parameters():
-                param.requires_grad = False
+            num_params = len(list(selected_model.parameters()))
+            log.debug(
+                f"Loaded model has {num_params}... Unfreezing {blocks_to_retrain}"
+            )
+            for i, (pname, param) in enumerate(selected_model.named_parameters()):
+                if i + 1 >= (num_params - blocks_to_retrain):
+                    log.debug(f"Unfreezing {pname}")
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
 
         first_conv_layer = [
             nn.Conv2d(

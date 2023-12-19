@@ -48,6 +48,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
         *,
         cnn: Optional[str] = None,
         pretrained: bool = True,
+        blocks_to_retrain: int = 15,
         cnn_dropout: float = 0.3,
         **kwargs,
     ):
@@ -83,6 +84,7 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
                 num_events=num_events,
                 num_nodes=num_nodes,
                 dropout=cnn_dropout,
+                blocks_to_retrain=blocks_to_retrain,
             )
             if cnn is not None
             else EVENT_PREDICTOR_CNN(
@@ -92,8 +94,10 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
                 dropout=cnn_dropout,
             )
         )
-        log.info(f"Built {self.cnn.name.lower()} model for prediction")
-        self.name = f"SOCIAL_COLLISON_STGCNN_{self.cnn.name}"
+        log.info(
+            f"Built {self.cnn.name.lower()} model for prediction"  # pylint: disable=union-attr, operator
+        )
+        self.name = f"SOCIAL_COLLISON_STGCNN_{self.cnn.name}"  # pylint: disable=union-attr, operator
 
     def forward(self, v, a):
         """

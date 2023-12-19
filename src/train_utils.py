@@ -177,7 +177,7 @@ def validate(
     model: nn.Module,
     validation_loader: DataLoader,
     device: Any,
-) -> Tuple[float, float, float, float]:
+) -> Tuple[float, ...]:
     running_vloss = 0.0
     running_time_acc = 0.0
     running_node_acc = 0.0
@@ -219,7 +219,7 @@ def validate(
 
 def test(
     model: nn.Module, test_loader: DataLoader, device: Any, sample_steps: int = 20
-) -> Tuple[float, float]:
+) -> Tuple[float, ...]:
     # Set the model to evaluation mode, disabling dropout and using population
     # statistics for batch normalization.
     model.eval()
@@ -275,7 +275,7 @@ def test(
                 (V_pred, simo), truth_labels.copy(), device
             ).item()
             if (i + 1) % 10 == 0:
-                avg_vloss += running_tloss / 10  # per 10 batches
+                avg_tloss += running_tloss / 10  # per 10 batches
                 running_tloss = 0
             # Compute accuracy
             event_acc, node_acc, time_acc = compute_accuracy(
@@ -328,7 +328,7 @@ def test(
     avg_te_acc = 100 * running_event_acc / len(test_loader)
     avg_tn_acc = 100 * running_node_acc / len(test_loader)
     avg_tt_acc = 100 * running_time_acc / len(test_loader)
-    res_ade = np.sum(np.array(ade)) / len(ade)
-    res_fde = np.sum(np.array(fde)) / len(fde)
+    res_ade = float(np.sum(np.array(ade)) / len(ade))
+    res_fde = float(np.sum(np.array(fde)) / len(fde))
 
     return res_ade, res_fde, avg_tloss, avg_te_acc, avg_tn_acc, avg_tt_acc
