@@ -130,7 +130,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         Returns:
             Tuple containing model and output size
         """
-        self.name = self.__class__.__name__
+
         if name.lower() not in dir(models):
             raise ValueError(
                 f"Invalid model name: {name}."
@@ -142,7 +142,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
             raise ValueError("Currently, there is only support for ResNet backbones...")
 
         selected_model: nn.Module = getattr(models, name.lower())(pretrained=pretrained)
-
+        self.name = f"{name.capitalize()}_PREDICTOR"
         # Fine-tune pretrained model
         if pretrained:
             for param in selected_model.parameters():

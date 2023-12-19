@@ -290,7 +290,9 @@ class TrajectoryDataset(Dataset):
         # Parse entire play and collect relevant attributes for each player
         prev_features_df = first_frame[self._frame_features]
         for frames in lst_of_frames:
-            frame = frames.sort_values(by=["nflId"])
+            frame = pd.merge(
+                self.players_df, frames, left_on="nflId", right_on="nflId"
+            ).sort_values(by=["position"])
             merged_games = pd.merge(
                 self.games_df, frame, left_on="gameId", right_on="gameId"
             )
@@ -312,10 +314,15 @@ class TrajectoryDataset(Dataset):
             # whether player on home team, has possession, is ball carrier
 
             # X and Y denote relative displacements from start of play
-            x_vals = frame[["x"]].values - prev_features_df[["x"]].values
-            y_vals = frame[["y"]].values - prev_features_df[["y"]].values
-            s_vals = frame[["s"]].values - prev_features_df[["s"]].values
-            a_vals = frame[["a"]].values - prev_features_df[["a"]].values
+            x_vals_rel = frame[["x"]].values - prev_features_df[["x"]].values
+            y_vals_rel = frame[["y"]].values - prev_features_df[["y"]].values
+            s_vals_rel = frame[["s"]].values - prev_features_df[["s"]].values
+            a_vals_rel = frame[["a"]].values - prev_features_df[["a"]].values
+
+            x_vals = frame[["x"]].values
+            y_vals = frame[["y"]].values
+            s_vals = frame[["s"]].values
+            a_vals = frame[["a"]].values
 
             # Update previous features
             prev_features_df = frame[self._frame_features]
@@ -383,10 +390,10 @@ class TrajectoryDataset(Dataset):
 
             current = np.concatenate(
                 [
-                    x_vals,
-                    y_vals,
-                    s_vals,
-                    a_vals,
+                    x_vals_rel,
+                    y_vals_rel,
+                    s_vals_rel,
+                    a_vals_rel,
                     dis_vals,
                     o_vals,
                     dir_vals,
@@ -404,6 +411,10 @@ class TrajectoryDataset(Dataset):
                     is_tackle_play,
                     is_fumble_play,
                     is_involved,  # categorical
+                    x_vals,
+                    y_vals,
+                    s_vals,
+                    a_vals,
                 ],
                 axis=1,
             )[np.newaxis, ...]
@@ -435,11 +446,14 @@ class TrajectoryDataset(Dataset):
             if tofc is not None
             else -total_time_of_play
         )[0]
-        # convert from (batch_size, frames, num_nodes, num_features)
-        # to the expected format (batch_size, num_features, frames, num_nodes)
+        # (batch_size, frames, num_nodes, num_features)
+        obs_traj_rel, obs_truth_rel = (
+            data[:, : self.obs_len, :, :-4],
+            data[:, self.obs_len : self.obs_len + self.pred_len, :, :-4],
+        )
         obs_traj, obs_truth = (
-            data[:, : self.obs_len],
-            data[:, self.obs_len : self.obs_len + self.pred_len],
+            data[:, : self.obs_len, :, -4:],
+            data[:, self.obs_len : self.obs_len + self.pred_len, :, -4:],
         )
         graph_traj, graph_truth = (
             graph[: self.obs_len],
@@ -447,11 +461,15 @@ class TrajectoryDataset(Dataset):
         )
         return {
             "data": [
-                torch.from_numpy(obs_traj.squeeze()).type(torch.float),
+                torch.from_numpy(obs_traj_rel.squeeze()).type(torch.float),
                 torch.from_numpy(np.array(graph_traj).squeeze()).type(torch.float),
+                torch.from_numpy(obs_traj.squeeze()).type(torch.float),
             ],
             "labels": {
                 "trajectory": torch.from_numpy(obs_truth.squeeze()).type(torch.float),
+                "trajectory_relative": torch.from_numpy(obs_truth_rel.squeeze()).type(
+                    torch.float
+                ),
                 "graph": torch.from_numpy(np.array(graph_truth).squeeze()).type(
                     torch.float
                 ),

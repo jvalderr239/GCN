@@ -92,7 +92,8 @@ class SOCIAL_COLLISION_STGCNN(nn.Module):
                 dropout=cnn_dropout,
             )
         )
-        log.info(f"Built {self.cnn.name} model for prediction")
+        log.info(f"Built {self.cnn.name.lower()} model for prediction")
+        self.name = f"SOCIAL_COLLISON_STGCNN_{self.cnn.name}"
 
     def forward(self, v, a):
         """

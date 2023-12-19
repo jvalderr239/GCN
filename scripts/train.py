@@ -18,7 +18,6 @@ logging.config.fileConfig(str(log_file_path))
 log = logging.getLogger()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-log.info(f"Working with {device} for training")
 
 
 def train(
@@ -33,6 +32,7 @@ def train(
     if root_dir is None:
         root_dir = str(get_project_root() / "resources") + "/"
     trainer = train_utils.Trainer(**kwargs)
+    log.info(f"Working with {device} for training")
     log.info("Loading training set")
     loader_train = train_utils.generate_dataloader(
         "train",
@@ -54,7 +54,7 @@ def train(
         pred_len=trainer.pred_seq_len,
     )
     log.info("Loading test set")
-    loader_val = train_utils.generate_dataloader(
+    loader_test = train_utils.generate_dataloader(
         "test",
         batch_size=batch_size,
         shuffle=False,
@@ -106,7 +106,7 @@ def train(
             device=device,
         )
 
-        log.info(f"Time Prediction Training Accuracy: {avg_t_acc}")
+        log.info(f"Time Prediction Training MSE: {avg_t_acc}")
         log.info(f"Event Type Training Accuracy: {avg_e_acc}")
         log.info(f"Node Index Training Accuracy: {avg_n_acc}")
 
@@ -116,7 +116,7 @@ def train(
             device=device,
         )
 
-        log.info(f"Time Prediction Validation Accuracy: {avg_vt_acc}")
+        log.info(f"Time Prediction Validation MSE: {avg_vt_acc}")
         log.info(f"Event Type Validation Accuracy: {avg_ve_acc}")
         log.info(f"Node Index Validation Accuracy: {avg_vn_acc}")
 
@@ -135,7 +135,7 @@ def train(
             epoch_number + 1,
         )
         writer.add_scalars(
-            "Training vs. Validation Time Prediction Accuracy",
+            "Training vs. Validation Time Prediction MSE",
             {"Training": avg_t_acc, "Validation": avg_vt_acc},
             epoch_number + 1,
         )
@@ -155,14 +155,19 @@ def train(
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
             best_epoch = epoch_number + 1
-            model_path = (
-                f"{dest_dir}/social_collision_stgcnn_{timestamp}_{epoch_number + 1}.pt"
-            )
+            model_path = f"{dest_dir}/{stgcnn_model.name.lower()}_{timestamp}_{epoch_number + 1}.pt"
             train_utils.checkpoint(stgcnn_model, model_path)
         elif (epoch_number + 1) - best_epoch > early_stop_thresh:
             log.warning(f"Early stopped training at epoch {epoch_number + 1}")
             break  # terminate the training loop
 
+    log.info("Validating against test set")
+    ade, fde = train_utils.test(
+        model=stgcnn_model,
+        test_loader=loader_test,
+        device=device,
+    )
+    log.info(f"ADE: {ade}, FDE: {fde}")
     log.info("Finished Training...")
 
 
