@@ -4,7 +4,8 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 import torch
-from torcheval.metrics import MeanSquaredError, MultilabelAccuracy
+from torcheval.metrics import MultilabelAccuracy
+from torchmetrics.regression import MeanAbsoluteError
 
 from src.utils import get_project_root
 
@@ -14,7 +15,7 @@ logging.config.fileConfig(str(log_file_path))
 log = logging.getLogger("metrics")
 
 multilabel_acc = MultilabelAccuracy()
-mse = MeanSquaredError()
+mae = MeanAbsoluteError()
 
 
 def compute_ade(pred: torch.Tensor, truth: torch.Tensor):
@@ -78,11 +79,10 @@ def compute_accuracy(
         Accuracy for each cnn output
     """
     time_acc = (
-        mse.update(
+        mae(
             outputs["time_of_event"].squeeze().to(device),
             truth["time_of_event"].squeeze().to(device),
         )
-        .compute()
         .float()
         .item()
     )

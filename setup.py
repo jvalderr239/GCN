@@ -31,6 +31,7 @@ setup(
         "protobuf",
         "networkx",
         "tensorboard",
+        "torchmetrics",
         "fire",
         "nfl_data_py",
         "matplotlib", 

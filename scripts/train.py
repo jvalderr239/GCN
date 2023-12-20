@@ -123,7 +123,7 @@ def train(
             device=device,
         )
 
-        log.info(f"Time Prediction Training MSE: {avg_t_acc}")
+        log.info(f"Time Prediction Training MAE: {avg_t_acc}")
         log.info(f"Event Type Training Accuracy: {avg_e_acc}")
         log.info(f"Node Index Training Accuracy: {avg_n_acc}")
 
@@ -133,7 +133,7 @@ def train(
             device=device,
         )
 
-        log.info(f"Time Prediction Validation MSE: {avg_vt_acc}")
+        log.info(f"Time Prediction Validation MAE: {avg_vt_acc}")
         log.info(f"Event Type Validation Accuracy: {avg_ve_acc}")
         log.info(f"Node Index Validation Accuracy: {avg_vn_acc}")
 
@@ -155,7 +155,7 @@ def train(
             epoch_number + 1,
         )
         writer.add_scalars(
-            "Training vs. Validation Time Prediction MSE",
+            "Training vs. Validation Time Prediction MAE",
             {"Training": avg_t_acc, "Validation": avg_vt_acc},
             epoch_number + 1,
         )
@@ -175,7 +175,7 @@ def train(
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
             best_epoch = epoch_number + 1
-            model_path = f"{dest_dir}/{str(stgcnn_model).lower()}.pt"
+            model_path = f"{dest_dir}/{str(stgcnn_model).lower()}_{epoch_number}.pt"
             train_utils.checkpoint(stgcnn_model, model_path)
         elif (epoch_number + 1) - best_epoch > early_stop_thresh:
             log.warning(f"Early stopped training at epoch {epoch_number + 1}")
@@ -191,7 +191,7 @@ def train(
     time_acc = acc["time_of_event"]
     node_acc = acc["node_index"]
     event_acc = acc["event_type"]
-    log.info(f"Time Prediction Test MSE: {time_acc}")
+    log.info(f"Time Prediction Test MAE: {time_acc}")
     log.info(f"Event Type Test Accuracy: {event_acc}")
     log.info(f"Node Index Test Accuracy: {node_acc}")
 
@@ -204,7 +204,7 @@ def train(
 
     with open(f"{dest_dir}/test_metrics.json", "w") as fp:
         json.dump(test_metrics, fp)
-    with open(f"{dest_dir}/test_metrics.json", "w") as fp:
+    with open(f"{dest_dir}/tracking_data.json", "w") as fp:
         json.dump(tracking_test_data, fp)
 
     log.info(f"Stored results in {dest_dir}")

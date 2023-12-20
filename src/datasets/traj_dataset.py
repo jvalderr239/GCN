@@ -445,15 +445,11 @@ class TrajectoryDataset(Dataset):
         )
         toa_label: bool = toa is not None
         toa_time_label = (
-            (toa - start_time).total_seconds()
-            if toa is not None
-            else -total_time_of_play
+            (toa - start_time).total_seconds() if toa is not None else [-1]
         )[0]
         tofc_label: bool = tofc is not None
         tofc_time_label = (
-            (tofc - start_time).total_seconds()
-            if tofc is not None
-            else -total_time_of_play
+            (tofc - start_time).total_seconds() if tofc is not None else [-1]
         )[0]
         # (batch_size, frames, num_nodes, num_features)
         obs_traj_rel, obs_truth_rel = (
