@@ -28,6 +28,7 @@ def train(
     batch_size: int = 1,
     early_stop_thresh: int = 75,
     checkpoint_path: Optional[str] = None,
+    start_epoch: int = 0,
     **kwargs,
 ):
     # Defining the model
@@ -87,8 +88,8 @@ def train(
         blocks_to_retrain=trainer.blocks_to_retrain,
     ).to(device)
 
-    if checkpoint_path:
-        stgcnn_model.load_state_dict(torch.load(checkpoint_path))
+    if checkpoint_path and start_epoch > 0:
+        train_utils.resume(stgcnn_model, checkpoint_path)
 
     # Training settings
     optimizer = torch.optim.Adam(
@@ -109,7 +110,7 @@ def train(
     best_vloss = 1_000_000.0
 
     log.info(f"Training for {epochs} epochs")
-    for epoch_number in (pbar := tqdm(range(epochs))):
+    for epoch_number in (pbar := tqdm(range(start_epoch, epochs))):
         pbar.set_description(f"EPOCH {epoch_number + 1}")
 
         avg_loss, avg_e_acc, avg_n_acc, avg_t_acc = train_utils.train_one_epoch(
@@ -174,7 +175,7 @@ def train(
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
             best_epoch = epoch_number + 1
-            model_path = f"{dest_dir}/{str(stgcnn_model).lower()}_{timestamp}_{epoch_number + 1}.pt"
+            model_path = f"{dest_dir}/{str(stgcnn_model).lower()}.pt"
             train_utils.checkpoint(stgcnn_model, model_path)
         elif (epoch_number + 1) - best_epoch > early_stop_thresh:
             log.warning(f"Early stopped training at epoch {epoch_number + 1}")

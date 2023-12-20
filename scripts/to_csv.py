@@ -17,20 +17,21 @@ def generate_csv(
     split: float,
     csv_name: str = "tracking*",
     *,
-    root_dir: str = "../resources/nfl-big-data-bowl-2024/",
+    root_dir: str = "../resources/",
     min_frames: int = 60,
     max_frames: int = 70,
     seed: int = 239,
     **kwargs,
 ):
     assert 0 < split < 1, f"Split must be a float. Got {split}"
-    dataset = TrajectoryDataset(datatype=csv_name, **kwargs)
-    _, frame_data, *_ = dataset.read_tracking_data(
-        root_dir=root_dir,
+    dataset = TrajectoryDataset(
         datatype=csv_name,
+        root_dir=root_dir,
         min_frames=min_frames,
         max_frames=max_frames,
+        **kwargs,
     )
+    frame_data = dataset.data
     random.seed(seed)
     random.shuffle(frame_data)
     train_size = int(len(frame_data) * split)
@@ -38,6 +39,7 @@ def generate_csv(
 
     train, val, test = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     pbar = tqdm(total=train_size)
+    root_dir = "./"
     for frames in frame_data[:train_size]:
         pbar.update(1)
         inter = pd.concat(frames, axis=0)

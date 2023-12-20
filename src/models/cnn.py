@@ -128,7 +128,7 @@ class PRETRAINED_EVENT_PREDICTOR_CNN(nn.Module):
         )
 
     def __str__(self):
-        return f"{self._model_name}_predictor"
+        return f"{self._model_name}"
 
     def _get_base_model(
         self,
