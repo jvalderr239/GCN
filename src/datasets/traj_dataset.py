@@ -20,10 +20,10 @@ log = logging.getLogger("datasets")
 
 
 class DATA_COLUMNS(IntEnum):
-    X = 0
-    Y = 1
-    SPEED = 2
-    ACC = 3
+    X_REL = 0
+    Y_REL = 1
+    SPEED_REL = 2
+    ACC_REL = 3
     DISTANCE_TRAVELED = 4
     ORIENTATION = 5
     DIRECTION = 6
@@ -32,11 +32,19 @@ class DATA_COLUMNS(IntEnum):
     IS_IN_POSSESSION = 9
     IS_BALL_CARRIER = 10
     IS_HOME = 11
-    IS_FIRST_CONTACT = 12
-    IS_TACKLE = 13
-    IS_FUMBLE = 14
-    IS_INVOLVED = 15
-    TIME_TO_ATTACK = 16
+    NUM_ACTIVE_DEFENDERS = 12
+    YARDS_TO_GO = 13
+    CURRENT_DOWN = 14
+    PASS_PROBABILITY = 15
+    YARDS_TO_TOUCHDOWN = 16
+    IS_FIRST_CONTACT = 17
+    IS_TACKLE = 18
+    IS_FUMBLE = 19
+    IS_INVOLVED = 20
+    X = 21
+    Y = 22
+    SPEED = 23
+    ACC = 24
 
 
 class TrajectoryDataset(Dataset):
@@ -406,8 +414,8 @@ class TrajectoryDataset(Dataset):
                     dis_vals,
                     o_vals,
                     dir_vals,
-                    collect_time,  # spatial features
                     weight_vals,
+                    collect_time,  # spatial features
                     is_in_possesion,
                     is_ball_carrier,
                     is_home,

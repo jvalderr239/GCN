@@ -114,7 +114,7 @@ def criterion(
     loss_map: Dict[str, Any] = {
         "node_index": torch.nn.BCELoss(),
         "event_type": torch.nn.BCELoss(),
-        "time_of_event": torch.nn.MSELoss(),
+        "time_of_event": torch.nn.L1Loss(),
     }
 
     losses = 0
