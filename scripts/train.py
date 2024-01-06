@@ -74,9 +74,6 @@ def train(
         n_stgcnn=trainer.num_spatial,
         n_txpcnn=trainer.num_temporal,
         input_feat=trainer.num_features,
-        input_cnn_feat=trainer.num_features
-        - trainer.num_spatial_features
-        + trainer.output_feat,
         output_feat=trainer.output_feat,
         seq_len=trainer.seq_len,
         pred_seq_len=trainer.pred_seq_len,
